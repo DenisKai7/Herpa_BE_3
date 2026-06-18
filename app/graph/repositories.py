@@ -278,17 +278,21 @@ class KnowledgeGraphRepository:
     async def plants_for_symptoms(
         self, symptoms: list[str], limit: int = 8, cache_ttl: int = 0
     ) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        seen: set[str] = set()
+        by_plant: dict[str, dict[str, Any]] = {}
         for symptom in symptoms:
             for row in await self.herbs_by_therapeutic_use(symptom, limit=limit, cache_ttl=cache_ttl):
-                plant_id = (row.get("plant") or {}).get("plant_id")
-                if plant_id and plant_id in seen:
+                plant = row.get("plant") or {}
+                plant_id = plant.get("plant_id") or plant.get("herb_id") or plant.get("id")
+                if not plant_id:
                     continue
-                if plant_id:
-                    seen.add(plant_id)
-                row["matched_symptoms"] = [symptom]
-                rows.append(row)
+                if plant_id not in by_plant:
+                    row["matched_symptoms"] = []
+                    by_plant[plant_id] = row
+                matched = by_plant[plant_id].setdefault("matched_symptoms", [])
+                if symptom not in matched:
+                    matched.append(symptom)
+        rows = list(by_plant.values())
+        rows.sort(key=lambda row: len(row.get("matched_symptoms", [])), reverse=True)
         return rows[:limit]
 
     async def fulltext_index_status(self, index_name: str) -> dict[str, Any]:

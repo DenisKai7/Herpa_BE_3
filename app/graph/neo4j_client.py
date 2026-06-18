@@ -7,6 +7,7 @@ from neo4j.exceptions import SessionExpired, ServiceUnavailable, TransientError
 
 from app.core.config import Settings
 from app.core.exceptions import AppError
+from app.core.json_safety import json_safe
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ class Neo4jClient:
 
     async def _execute_query(self, tx, query: str, parameters: dict[str, Any]) -> list[dict[str, Any]]:
         result = await tx.run(query, parameters, timeout=self.settings.neo4j_query_timeout_seconds)
-        return [record.data() async for record in result]
+        return [json_safe(record.data()) async for record in result]
 
     def _handle_exception(self, exc: Exception, query: str, parameters: dict[str, Any] | None) -> None:
         details = {

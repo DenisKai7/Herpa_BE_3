@@ -85,7 +85,20 @@ LIMIT $limit
 
 HERB_SOURCES = """
 MATCH (h:Herb {id: $herb_id})-[:VERIFIED_BY]->(source:Source)
-RETURN properties(source) AS source
+RETURN {
+    type: 'neo4j',
+    source_id: coalesce(source.id, source.identifier, source.name),
+    id: source.id,
+    title: source.name,
+    name: source.name,
+    identifier: source.identifier,
+    year: source.year,
+    url: source.url,
+    evidence_level: source.evidenceLevel,
+    updated_at: toString(source.updatedAt),
+    created_at: toString(source.createdAt),
+    last_updated: toString(source.lastUpdated)
+} AS source
 LIMIT $limit
 """
 
