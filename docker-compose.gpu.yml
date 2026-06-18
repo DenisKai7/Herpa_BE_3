@@ -1,0 +1,7 @@
+services:
+  llama-text:
+    image: ${LLAMA_CPP_CUDA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
+    gpus: all
+  llama-vlm:
+    image: ${LLAMA_CPP_CUDA_IMAGE:-ghcr.io/ggml-org/llama.cpp:server-cuda}
+    gpus: all

@@ -1,0 +1,6 @@
+question,intent,persona,mode,direct_answer_used,model_calls,retrieval_ms,ttft_ms,generation_ms,total_ms,compound_count,answer_length,finish_reason,error
+senyawa di dalam kelor apa aja?,herbal_information,umum,fast-medium,True,0,1603,0,0,1606,1,343,complete,
+senyawa di dalam kelor apa aja?,herbal_information,umum,thinking-high,False,1,185,0,175014,175206,0,717,stop,
+senyawa di dalam kelor apa aja?,herbal_information,pelajar,fast-medium,True,0,2,0,0,8,1,414,complete,
+senyawa di dalam kelor apa aja?,herbal_information,pelajar,thinking-high,False,1,1230,0,121874,123117,0,1305,length,
+senyawa di dalam kelor apa aja?,herbal_information,peneliti,fast-medium,True,0,2,0,0,15,1,262,complete,

@@ -1,0 +1,10 @@
+[
+  {"plant_id":"plant:zingiber_officinale","local_name":"Jahe","scientific_name":"Zingiber officinale","family":"Zingiberaceae","parts":["Rimpang"],"compounds":[{"compound_id":"compound:gingerol","name":"6-Gingerol","pubchem_cid":"442793"}],"symptoms":["mual","perut kembung"],"evidence_level":"limited_clinical"},
+  {"plant_id":"plant:curcuma_longa","local_name":"Kunyit","scientific_name":"Curcuma longa","family":"Zingiberaceae","parts":["Rimpang"],"compounds":[{"compound_id":"compound:curcumin","name":"Curcumin","pubchem_cid":"969516"}],"symptoms":[],"evidence_level":"preclinical"},
+  {"plant_id":"plant:curcuma_xanthorrhiza","local_name":"Temulawak","scientific_name":"Curcuma xanthorrhiza","family":"Zingiberaceae","parts":["Rimpang"],"compounds":[],"symptoms":[],"evidence_level":"traditional"},
+  {"plant_id":"plant:kaempferia_galanga","local_name":"Kencur","scientific_name":"Kaempferia galanga","family":"Zingiberaceae","parts":["Rimpang"],"compounds":[],"symptoms":[],"evidence_level":"traditional"},
+  {"plant_id":"plant:piper_betle","local_name":"Daun sirih","scientific_name":"Piper betle","family":"Piperaceae","parts":["Daun"],"compounds":[],"symptoms":[],"evidence_level":"traditional"},
+  {"plant_id":"plant:andrographis_paniculata","local_name":"Sambiloto","scientific_name":"Andrographis paniculata","family":"Acanthaceae","parts":["Herba"],"compounds":[],"symptoms":[],"evidence_level":"limited_clinical"},
+  {"plant_id":"plant:centella_asiatica","local_name":"Pegagan","scientific_name":"Centella asiatica","family":"Apiaceae","parts":["Herba"],"compounds":[],"symptoms":[],"evidence_level":"limited_clinical"},
+  {"plant_id":"plant:phyllanthus_niruri","local_name":"Meniran","scientific_name":"Phyllanthus niruri","family":"Phyllanthaceae","parts":["Herba"],"compounds":[],"symptoms":[],"evidence_level":"preclinical"}
+]

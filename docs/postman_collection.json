@@ -1,0 +1,14 @@
+{
+  "info": {"name": "HERPA Agentic GraphRAG API", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8000"},
+    {"key": "token", "value": "dev-user"}
+  ],
+  "item": [
+    {"name": "Health", "request": {"method": "GET", "url": "{{baseUrl}}/api/v1/health/dependencies"}},
+    {"name": "Login", "request": {"method": "POST", "header": [{"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\",\"password\":\"password123\"}"}, "url": "{{baseUrl}}/api/auth/login"}},
+    {"name": "Create chat", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"title\":\"Percakapan baru\"}"}, "url": "{{baseUrl}}/api/v1/chats"}},
+    {"name": "Send message", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"message\":\"Jelaskan kandungan jahe\",\"ai_mode\":\"umum\"}"}, "url": "{{baseUrl}}/api/chat/message"}},
+    {"name": "Recommendation", "request": {"method": "POST", "header": [{"key": "Authorization", "value": "Bearer {{token}}"}, {"key": "Content-Type", "value": "application/json"}], "body": {"mode": "raw", "raw": "{\"symptoms\":[\"mual\"],\"severity\":\"ringan\"}"}, "url": "{{baseUrl}}/api/herbal-recommendations/analyze"}}
+  ]
+}

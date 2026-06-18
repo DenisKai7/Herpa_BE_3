@@ -1,0 +1,15 @@
+MERGE (ginger:Plant {plant_id:'plant:zingiber_officinale'}) SET ginger.local_name='Jahe',ginger.indonesian_name='Jahe',ginger.scientific_name='Zingiber officinale',ginger.family='Zingiberaceae',ginger.synonyms=['ginger'],ginger.updated_at=datetime();
+MERGE (turmeric:Plant {plant_id:'plant:curcuma_longa'}) SET turmeric.local_name='Kunyit',turmeric.indonesian_name='Kunyit',turmeric.scientific_name='Curcuma longa',turmeric.family='Zingiberaceae',turmeric.synonyms=['turmeric'],turmeric.updated_at=datetime();
+MERGE (rhizome:PlantPart {part_id:'part:rhizome',name:'Rimpang'});
+MERGE (gingerol:Compound {compound_id:'compound:gingerol',name:'6-Gingerol',pubchem_cid:'442793'});
+MERGE (curcumin:Compound {compound_id:'compound:curcumin',name:'Curcumin',pubchem_cid:'969516'});
+MERGE (nausea:Symptom {symptom_id:'symptom:nausea',name:'mual',synonyms:['nausea']});
+MERGE (bloating:Symptom {symptom_id:'symptom:bloating',name:'perut kembung',synonyms:['kembung']});
+MERGE (gi:Evidence {evidence_id:'evidence:ginger_nausea_demo',level:'limited_clinical',summary:'Contoh seed untuk pengujian. Verifikasi sumber klinis sebelum penggunaan produksi.'});
+MERGE (ginger)-[:HAS_PART]->(rhizome);
+MERGE (ginger)-[:CONTAINS_COMPOUND]->(gingerol);
+MERGE (turmeric)-[:HAS_PART]->(rhizome);
+MERGE (turmeric)-[:CONTAINS_COMPOUND]->(curcumin);
+MERGE (ginger)-[:MAY_RELIEVE {strength:0.75}]->(nausea);
+MERGE (ginger)-[:MAY_RELIEVE {strength:0.45}]->(bloating);
+MERGE (ginger)-[:SUPPORTED_BY]->(gi);
