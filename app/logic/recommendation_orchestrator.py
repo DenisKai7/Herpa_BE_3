@@ -28,6 +28,19 @@ MOCK_PLANTS = {
     },
 }
 
+NO_HERBAL_MATCH_WARNING = "Data knowledge graph belum menemukan rekomendasi herbal yang cukup kuat untuk keluhan ini."
+
+
+def extract_symptoms_from_complaint(complaint: str) -> list[str]:
+    normalized = " ".join(complaint.lower().strip().split())
+    if not normalized:
+        return []
+
+    for separator in (",", ";", " dengan ", " dan "):
+        normalized = normalized.replace(separator, "|")
+
+    return [item.strip() for item in normalized.split("|") if len(item.strip()) >= 3]
+
 
 class RecommendationOrchestrator:
     def __init__(self, repository: KnowledgeGraphRepository, db: SupabaseClient, allow_mock: bool = False):
@@ -39,7 +52,12 @@ class RecommendationOrchestrator:
     async def analyze(
         self, user_id: str, payload: HerbalRecommendationRequest, request_id: str
     ) -> HerbalRecommendationResponse:
-        all_text = " ".join(payload.symptoms + [payload.free_text]).lower()
+        if not payload.symptoms:
+            payload.symptoms = extract_symptoms_from_complaint(payload.complaint or payload.free_text)
+        if not payload.free_text and payload.complaint:
+            payload.free_text = payload.complaint
+
+        all_text = " ".join(payload.symptoms + [payload.free_text, payload.complaint]).lower()
         red = [message for term, message in RED_FLAGS.items() if term in all_text]
         if payload.severity == "berat":
             red.append("Keluhan berat memerlukan evaluasi tenaga kesehatan.")
@@ -118,11 +136,8 @@ class RecommendationOrchestrator:
                 )
             )
         status = "completed" if candidates else "no_fully_verified_candidate"
-        limitations = (
-            []
-            if candidates
-            else ["Knowledge graph belum memiliki kandidat aman yang terverifikasi untuk keluhan tersebut."]
-        )
+        limitations = [] if candidates else [NO_HERBAL_MATCH_WARNING]
+        warnings = [] if candidates else [NO_HERBAL_MATCH_WARNING]
         response = HerbalRecommendationResponse(
             status=status,
             request_id=request_id,
@@ -130,6 +145,7 @@ class RecommendationOrchestrator:
             options=candidates,
             excluded_candidates=excluded,
             limitations=limitations,
+            warnings=warnings,
             metadata={"knowledge_graph_checked": True, "candidate_count": len(candidates)},
         )
         if self.allow_mock:

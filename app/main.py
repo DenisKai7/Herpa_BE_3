@@ -1,6 +1,11 @@
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
 from app.api.dependencies.services import close_services, create_services
 from app.api.v1.router import router
 from app.core.config import get_settings
@@ -10,6 +15,7 @@ from app.core.telemetry import request_context_middleware
 
 settings = get_settings()
 configure_logging(settings.log_level)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -36,6 +42,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_exception_handler(AppError, app_error_handler)  # type: ignore[arg-type]
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", "unknown")
+    errors = exc.errors()
+    logger.warning(
+        "request_validation_failed",
+        extra={
+            "request_id": request_id,
+            "path": str(request.url.path),
+            "error_code": "VALIDATION_ERROR",
+            "validation_errors": errors,
+        },
+    )
+    return JSONResponse(
+        status_code=422,
+        content={
+            "success": False,
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Format request tidak sesuai.",
+                "details": errors,
+            },
+            "meta": {"request_id": request_id},
+        },
+    )
+
+
 app.include_router(router)
 
 
