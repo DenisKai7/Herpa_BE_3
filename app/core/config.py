@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     neo4j_username: str = ""
     neo4j_password: str = ""
     neo4j_database: str = "neo4j"
-    neo4j_query_timeout_seconds: float = 15
+    neo4j_query_timeout_seconds: float = 8
+    neo4j_detail_query_timeout_seconds: float = 10
     neo4j_max_retry_attempts: int = 2
     neo4j_retry_base_delay_ms: int = 200
     neo4j_max_transaction_retry_time_seconds: float = 8
@@ -136,6 +137,10 @@ class Settings(BaseSettings):
     rate_limit_chat_per_minute: int = 10
     rate_limit_upload_per_minute: int = 5
     share_token_expiry_days: int = 30
+    herbal_recommendation_light_analyze: bool = True
+    herbal_recommendation_lazy_detail: bool = True
+    herbal_recommendation_max_candidates: int = 8
+    herbal_recommendation_detail_parallelism: int = 2
     log_level: str = "INFO"
 
     @property

@@ -18,11 +18,11 @@ class ApiResponse(BaseModel, Generic[T]):
 
 
 class SourceReference(BaseModel):
-    type: str
-    source_id: str
-    title: str
+    type: str = "neo4j"
+    source_id: str | None = None
+    title: str | None = None
     identifier: str | None = None
-    year: int | None = None
+    year: int | str | None = None
     evidence_level: str | None = None
     url: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

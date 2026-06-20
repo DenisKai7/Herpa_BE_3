@@ -41,7 +41,13 @@ class Neo4jClient:
         except Exception:
             return False
 
-    async def read(self, query: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    async def read(
+        self,
+        query: str,
+        parameters: dict[str, Any] | None = None,
+        timeout_seconds: float | None = None,
+        max_retries: int | None = None,
+    ) -> list[dict[str, Any]]:
         if self.driver is None:
             return []
         normalized = query.strip().upper()
@@ -60,38 +66,56 @@ class Neo4jClient:
             raise AppError("FORBIDDEN", "Query graf write tidak diizinkan pada jalur retrieval.", 403)
 
         attempts = 0
+        retry_limit = self.settings.neo4j_max_retry_attempts if max_retries is None else max(0, max_retries)
         base_delay = self.settings.neo4j_retry_base_delay_ms / 1000.0
         while True:
             attempts += 1
             try:
                 async with self.driver.session(database=self.settings.neo4j_database) as session:
-                    # Use managed read transaction which has built-in retry logic
-                    return await session.execute_read(self._execute_query, query, parameters or {})
-            except (SessionExpired, ServiceUnavailable, TransientError, ConnectionResetError) as exc:
-                if attempts <= self.settings.neo4j_max_retry_attempts:
+                    return await session.execute_read(
+                        self._execute_query,
+                        query,
+                        parameters or {},
+                        timeout_seconds or self.settings.neo4j_query_timeout_seconds,
+                    )
+            except (SessionExpired, ServiceUnavailable, TransientError, ConnectionResetError, TimeoutError) as exc:
+                if attempts <= retry_limit:
                     await asyncio.sleep(base_delay * (2 ** (attempts - 1)))
                     continue
-                self._handle_exception(exc, query, parameters)
+                self._handle_exception(exc, query, parameters, timeout_seconds, attempts)
             except Exception as exc:
-                self._handle_exception(exc, query, parameters)
+                self._handle_exception(exc, query, parameters, timeout_seconds, attempts)
 
     async def write(self, query: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         if self.driver is None:
             return []
         async with self.driver.session(database=self.settings.neo4j_database) as session:
-            return await session.execute_write(self._execute_query, query, parameters or {})
+            return await session.execute_write(
+                self._execute_query, query, parameters or {}, self.settings.neo4j_query_timeout_seconds
+            )
 
-    async def _execute_query(self, tx, query: str, parameters: dict[str, Any]) -> list[dict[str, Any]]:
-        result = await tx.run(query, parameters, timeout=self.settings.neo4j_query_timeout_seconds)
+    async def _execute_query(
+        self, tx, query: str, parameters: dict[str, Any], timeout_seconds: float
+    ) -> list[dict[str, Any]]:
+        result = await tx.run(query, parameters, timeout=timeout_seconds)
         return [json_safe(record.data()) async for record in result]
 
-    def _handle_exception(self, exc: Exception, query: str, parameters: dict[str, Any] | None) -> None:
+    def _handle_exception(
+        self,
+        exc: Exception,
+        query: str,
+        parameters: dict[str, Any] | None,
+        timeout_seconds: float | None = None,
+        attempts: int = 1,
+    ) -> None:
         details = {
             "exception": type(exc).__name__,
             "reason": str(exc)[:2000],
             "database": self.settings.neo4j_database,
             "query_preview": query.strip()[:1000],
             "parameters": parameters or {},
+            "timeout_seconds": timeout_seconds or self.settings.neo4j_query_timeout_seconds,
+            "attempts": attempts,
         }
         logger.exception(
             "neo4j_query_failed",

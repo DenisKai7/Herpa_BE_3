@@ -1,9 +1,14 @@
+import logging
+
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.api.dependencies.auth import get_current_user
 from app.api.dependencies.services import Services, get_services
+from app.core.json_safety import json_safe
 from app.models.auth import CurrentUser
 from app.models.recommendation import HerbalRecommendationRequest, HerbalRecommendationResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Herbal Recommendations"])
 
@@ -17,6 +22,25 @@ async def analyze(
     services: Services = Depends(get_services),
 ) -> HerbalRecommendationResponse:
     return await services.recommendation_orchestrator.analyze(user.id, payload, request.state.request_id)
+
+
+@router.get("/api/herbal-recommendations/herbs/{herb_id}/detail")
+@router.get("/api/v1/recommendations/herbs/{herb_id}/detail", include_in_schema=False)
+async def get_herb_recommendation_detail(
+    herb_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    services: Services = Depends(get_services),
+):
+    logger.info("herbal_detail_stage", extra={"stage": "detail_request_received", "herb_id": herb_id})
+    detail = await services.recommendation_orchestrator.get_herb_recommendation_detail(herb_id, persona="umum")
+    return json_safe(
+        {
+            "status": "completed",
+            "herb_id": herb_id,
+            "detail": detail,
+            "disclaimer": "Informasi ini bersifat edukatif dan bukan diagnosis atau pengganti tenaga kesehatan.",
+        }
+    )
 
 
 @router.get("/api/v1/recommendations")

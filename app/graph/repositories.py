@@ -2,30 +2,51 @@ import asyncio
 import logging
 from typing import Any
 
+from app.core.config import get_settings
 from app.core.exceptions import AppError
 from app.graph.neo4j_client import Neo4jClient
 from app.graph.query_templates import (
     COMPOUND_BY_NAME,
     HERB_BASIC_BY_ID,
     HERB_COMPOUNDS,
+    HERB_DETAIL_CORE,
+    HERB_ENRICHMENT_DETAIL,
     HERB_FAMILY,
     HERB_PROTEIN_TARGETS,
     HERB_SOURCES,
     HERB_THERAPEUTIC_USES,
     HERB_TOXICITY,
+    HERBAL_RECOMMENDATION_BY_SYMPTOMS,
+    HERBAL_RECOMMENDATION_FULLTEXT_FALLBACK,
+    HERBAL_RECOMMENDATION_LIGHT_BY_SYMPTOMS,
+    HERBAL_RECOMMENDATION_LIGHT_LEGACY,
+    HERBAL_RECOMMENDATION_LIGHT_V3,
     HERBS_BY_COMPOUND,
     HERBS_BY_THERAPEUTIC_USE,
     HERB_FULLTEXT_SEARCH,
     HERB_PROPERTY_SEARCH_FALLBACK,
 )
+from app.services.recommendation.enrichment_mapper import empty_enrichment, map_enrichment_row
 from app.utils.cache import AsyncMemoryTTLCache
 
 logger = logging.getLogger(__name__)
 
 
+def build_fulltext_query(terms: list[str]) -> str:
+    clean_terms: list[str] = []
+    for term in terms:
+        value = " ".join(term.lower().strip().split())
+        if len(value) < 3:
+            continue
+        escaped = value.replace('"', "")
+        clean_terms.append(f'"{escaped}"~')
+    return " OR ".join(clean_terms[:10]) or "herbal"
+
+
 class KnowledgeGraphRepository:
     def __init__(self, client: Neo4jClient):
         self.client = client
+        self.settings = get_settings()
         self._cache = AsyncMemoryTTLCache(max_size=512)
 
     async def find_herbs(self, name: str, limit: int = 5, cache_ttl: int = 0) -> list[dict[str, Any]]:
@@ -274,6 +295,124 @@ class KnowledgeGraphRepository:
             "herbs_by_therapeutic_use": self.herbs_by_therapeutic_use,
             "herbs_by_compound": self.herbs_by_compound,
         }
+
+    async def get_herb_enrichment_detail(
+        self,
+        herb_id: str | None = None,
+        canonical_name: str | None = None,
+        common_name: str | None = None,
+    ) -> dict[str, Any]:
+        rows = await self.client.read(
+            HERB_ENRICHMENT_DETAIL,
+            {
+                "herb_id": herb_id or "",
+                "canonical_name": canonical_name or "",
+                "common_name": common_name or "",
+            },
+        )
+        if not rows:
+            return empty_enrichment()
+        return map_enrichment_row(rows[0])
+
+    async def recommend_herbs_by_symptoms(self, expanded_terms: list[str], limit: int = 8) -> list[dict[str, Any]]:
+        terms = [term.strip() for term in expanded_terms if term and term.strip()]
+        if not terms:
+            return []
+        rows = await self.client.read(
+            HERBAL_RECOMMENDATION_BY_SYMPTOMS,
+            {"expanded_terms": terms, "limit": max(1, min(limit, 20))},
+            timeout_seconds=self.settings.neo4j_query_timeout_seconds,
+            max_retries=0,
+        )
+        return rows or []
+
+    async def recommend_herbs_light_v3(
+        self, primary_terms: list[str], expanded_terms: list[str], limit: int = 8
+    ) -> list[dict[str, Any]]:
+        primary = [term.strip() for term in primary_terms if term and term.strip()][:5]
+        expanded = [term.strip() for term in expanded_terms if term and term.strip()][:15]
+        if not expanded:
+            return []
+        params = {"primary_terms": primary, "expanded_terms": expanded, "limit": max(1, min(limit, 20))}
+        try:
+            rows = await self.client.read(
+                HERBAL_RECOMMENDATION_LIGHT_V3,
+                params,
+                timeout_seconds=5,
+                max_retries=0,
+            )
+        except Exception:
+            logger.exception("recommend_herbs_light_v3_failed", extra={"term_count": len(expanded)})
+            rows = []
+        if rows:
+            return rows
+        try:
+            rows = await self.client.read(
+                HERBAL_RECOMMENDATION_FULLTEXT_FALLBACK,
+                {"fulltext_query": build_fulltext_query(expanded[:10]), "limit": max(1, min(limit, 20))},
+                timeout_seconds=5,
+                max_retries=0,
+            )
+        except Exception:
+            logger.exception("recommend_herbs_fulltext_fallback_failed", extra={"term_count": len(expanded)})
+            rows = []
+        if rows:
+            return rows
+        try:
+            return await self.recommend_herbs_light(expanded[:10], limit=limit)
+        except Exception:
+            logger.exception("recommend_herbs_legacy_failed", extra={"term_count": len(expanded)})
+            return []
+
+    async def recommend_herbs_light(self, terms: list[str], limit: int = 8) -> list[dict[str, Any]]:
+        clean_terms = [term.strip() for term in terms if term and term.strip()]
+        if not clean_terms:
+            return []
+        params = {"terms": clean_terms, "limit": max(1, min(limit, 20))}
+        try:
+            rows = await self.client.read(
+                HERBAL_RECOMMENDATION_LIGHT_BY_SYMPTOMS,
+                params,
+                timeout_seconds=self.settings.neo4j_query_timeout_seconds,
+                max_retries=0,
+            )
+        except Exception:
+            logger.exception("neo4j_light_symptom_recommendation_failed", extra={"term_count": len(clean_terms)})
+            rows = []
+        if rows:
+            return rows
+        try:
+            return await self.client.read(
+                HERBAL_RECOMMENDATION_LIGHT_LEGACY,
+                params,
+                timeout_seconds=self.settings.neo4j_query_timeout_seconds,
+                max_retries=0,
+            )
+        except Exception:
+            logger.exception("neo4j_light_legacy_recommendation_failed", extra={"term_count": len(clean_terms)})
+            return []
+
+    async def get_herb_detail_core(self, herb_id: str) -> dict[str, Any]:
+        if not herb_id:
+            return empty_enrichment()
+        try:
+            rows = await self.client.read(
+                HERB_DETAIL_CORE,
+                {"herb_id": herb_id},
+                timeout_seconds=self.settings.neo4j_detail_query_timeout_seconds,
+                max_retries=0,
+            )
+        except Exception:
+            logger.exception("neo4j_herb_detail_core_failed", extra={"herb_id": herb_id})
+            return empty_enrichment()
+        if not rows:
+            return empty_enrichment()
+        return map_enrichment_row(rows[0])
+
+    async def recommend_herbs_legacy(
+        self, symptoms: list[str], limit: int = 8, cache_ttl: int = 0
+    ) -> list[dict[str, Any]]:
+        return await self.plants_for_symptoms(symptoms, limit=limit, cache_ttl=cache_ttl)
 
     async def plants_for_symptoms(
         self, symptoms: list[str], limit: int = 8, cache_ttl: int = 0

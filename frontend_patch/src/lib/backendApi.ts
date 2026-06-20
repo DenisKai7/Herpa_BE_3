@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { HerbRecommendationDetailResponse } from "../types/backend";
 
 export const backendApi = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000",
@@ -22,3 +23,10 @@ backendApi.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+export async function getHerbRecommendationDetail(herbId: string) {
+  const response = await backendApi.get<HerbRecommendationDetailResponse>(
+    `/api/herbal-recommendations/herbs/${encodeURIComponent(herbId)}/detail`,
+  );
+  return response.data;
+}

@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.core.json_safety import json_safe
 from app.models.common import SourceReference
 
-SafetyStatus = Literal["safe", "caution", "unsafe", "unknown"]
-EvidenceStatus = Literal["available", "limited", "unavailable", "unknown"]
-RelevanceLevel = Literal["high", "medium", "low", "unknown"]
+SafetyStatus = Literal["safe", "limited", "caution", "unsafe", "unknown"]
+EvidenceStatus = Literal["available", "traditional", "limited", "clinical", "unavailable", "unknown"]
+RelevanceLevel = Literal["high", "medium", "low", "initial", "unknown"]
 
 
 class AgeGroup(StrEnum):
@@ -156,6 +156,149 @@ class HerbalRecommendationRequest(BaseModel):
         return mapping.get(normalized, normalized)
 
 
+
+VerificationStatus = Literal["verified", "limited", "traditional", "unavailable", "unknown"]
+EvidenceLevel = Literal["traditional", "pharmacopoeia", "preclinical", "clinical", "review", "computational", "unknown"]
+SafetySeverity = Literal["info", "caution", "danger"]
+
+class TraditionalUseItem(BaseModel):
+    id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    category: str | None = None
+    evidence_level: str = "traditional"
+    verification_status: str = "limited"
+    recommendation_weight: float | None = None
+    sources: list[SourceReference] = Field(default_factory=list)
+
+class PreparationMethodItem(BaseModel):
+    id: str | None = None
+    title: str | None = None
+    method_type: str | None = None
+    plant_part: str | None = None
+    ingredients: list[str] = Field(default_factory=list)
+    steps: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    verification_status: str = "limited"
+    formulations: list[str] = Field(default_factory=list)
+    sources: list[SourceReference] = Field(default_factory=list)
+
+class UsageGuidelineItem(BaseModel):
+    id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    frequency_text: str | None = None
+    duration_text: str | None = None
+    dose_status: str = "not_clinically_established"
+    verification_status: str = "limited"
+    sources: list[SourceReference] = Field(default_factory=list)
+
+class SafetyWarningItem(BaseModel):
+    id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    severity: str = "caution"
+    verification_status: str = "limited"
+    population_risks: list[str] = Field(default_factory=list)
+    sources: list[SourceReference] = Field(default_factory=list)
+
+class PlantPartItem(BaseModel):
+    id: str | None = None
+    name: str | None = None
+    description: str | None = None
+
+class StorageGuidelineItem(BaseModel):
+    id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    storage_temperature: str | None = None
+    notes: str | None = None
+    verification_status: str = "limited"
+
+class MythFactItem(BaseModel):
+    id: str | None = None
+    claim: str | None = None
+    fact: str | None = None
+    risk_level: str | None = None
+    verification_status: str = "limited"
+
+class QualityStandardItem(BaseModel):
+    id: str | None = None
+    parameter: str | None = None
+    value: str | None = None
+    source_standard: str | None = None
+    verification_status: str = "limited"
+
+class ClinicalGuidelineItem(BaseModel):
+    id: str | None = None
+    mechanism: str | None = None
+    therapeutic_dose_text: str | None = None
+    notes: str | None = None
+    visible_to: list[str] = Field(default_factory=list)
+    sources: list[SourceReference] = Field(default_factory=list)
+
+class DrugInteractionItem(BaseModel):
+    id: str | None = None
+    substance: str | None = None
+    description: str | None = None
+    severity: str = "caution"
+    population_risks: list[str] = Field(default_factory=list)
+
+class ContraindicationItem(BaseModel):
+    id: str | None = None
+    condition: str | None = None
+    description: str | None = None
+    severity: str = "caution"
+    population_risks: list[str] = Field(default_factory=list)
+
+class PharmacokineticProfileItem(BaseModel):
+    absorption: str | None = None
+    distribution: str | None = None
+    metabolism: str | None = None
+    excretion: str | None = None
+
+class ResearchTopicItem(BaseModel):
+    id: str | None = None
+    title: str | None = None
+    category: str | None = None
+    visible_to: list[str] = Field(default_factory=list)
+
+class ClaimEvidenceItem(BaseModel):
+    claim_id: str | None = None
+    claim_text: str | None = None
+    claim_type: str | None = None
+    evidence_level: str = "unknown"
+    evidence_summary: str | None = None
+    sources: list[SourceReference] = Field(default_factory=list)
+
+class SymptomItem(BaseModel):
+    id: str | None = None
+    name: str | None = None
+    category: str | None = None
+    aliases: list[str] = Field(default_factory=list)
+
+class HerbEnrichmentDetail(BaseModel):
+    traditional_uses: list[TraditionalUseItem] = Field(default_factory=list)
+    preparation_methods: list[PreparationMethodItem] = Field(default_factory=list)
+    usage_guidelines: list[UsageGuidelineItem] = Field(default_factory=list)
+    safety_warnings: list[SafetyWarningItem] = Field(default_factory=list)
+    plant_parts: list[PlantPartItem] = Field(default_factory=list)
+    storage_guidelines: list[StorageGuidelineItem] = Field(default_factory=list)
+    myth_facts: list[MythFactItem] = Field(default_factory=list)
+    quality_standards: list[QualityStandardItem] = Field(default_factory=list)
+    clinical_guidelines: list[ClinicalGuidelineItem] = Field(default_factory=list)
+    drug_interactions: list[DrugInteractionItem] = Field(default_factory=list)
+    contraindications: list[ContraindicationItem] = Field(default_factory=list)
+    pharmacokinetic_profiles: list[PharmacokineticProfileItem] = Field(default_factory=list)
+    research_topics: list[ResearchTopicItem] = Field(default_factory=list)
+    claims: list[ClaimEvidenceItem] = Field(default_factory=list)
+    related_symptoms: list[SymptomItem] = Field(default_factory=list)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def sanitize_lists(cls, value: Any) -> Any:
+        return json_safe(value)
+
 class HerbalCandidate(BaseModel):
     plant_id: str
     herb_id: str | None = None
@@ -176,7 +319,7 @@ class HerbalCandidate(BaseModel):
     evidence_label: str = "Data bukti belum tersedia"
     evidence_sources: list[dict[str, Any]] = Field(default_factory=list)
 
-    @field_validator("evidence_sources", "field_evidence", mode="before", check_fields=False)
+    @field_validator("evidence_sources", "field_evidence", "enrichment", "traditional_uses", "preparation_methods", "usage_guidelines", "safety_warnings", "plant_parts", "storage_guidelines", "myth_facts", "quality_standards", "clinical_guidelines", "drug_interactions_detail", "contraindications_detail", "pharmacokinetic_profiles", "research_topics", "claims", "related_symptom_details", mode="before", check_fields=False)
     @classmethod
     def sanitize_candidate_json_fields(cls, value: Any) -> Any:
         return json_safe(value)
@@ -199,12 +342,31 @@ class HerbalCandidate(BaseModel):
     sources: list[SourceReference] = Field(default_factory=list)
     field_evidence: dict[str, Any] = Field(default_factory=dict)
     graph_coverage_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    primary_coverage_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    expanded_coverage_score: float = Field(default=0.0, ge=0.0, le=1.0)
+    traditional_use_score: float = Field(default=0.0, ge=0.0, le=1.0)
     trusted_source_coverage_score: float = Field(default=0.0, ge=0.0, le=1.0)
     model_assisted_coverage_score: float = Field(default=0.0, ge=0.0, le=1.0)
     safety_coverage_score: float = Field(default=0.0, ge=0.0, le=1.0)
     overall_verification_status: str = "insufficient_data"
     safety_data_status: str = "missing"
     general_safety_warnings: list[str] = Field(default_factory=list)
+    enrichment: HerbEnrichmentDetail = Field(default_factory=HerbEnrichmentDetail)
+    traditional_uses: list[TraditionalUseItem] = Field(default_factory=list)
+    preparation_methods: list[PreparationMethodItem] = Field(default_factory=list)
+    usage_guidelines: list[UsageGuidelineItem] = Field(default_factory=list)
+    safety_warnings: list[SafetyWarningItem] = Field(default_factory=list)
+    plant_parts: list[PlantPartItem] = Field(default_factory=list)
+    storage_guidelines: list[StorageGuidelineItem] = Field(default_factory=list)
+    myth_facts: list[MythFactItem] = Field(default_factory=list)
+    quality_standards: list[QualityStandardItem] = Field(default_factory=list)
+    clinical_guidelines: list[ClinicalGuidelineItem] = Field(default_factory=list)
+    drug_interactions_detail: list[DrugInteractionItem] = Field(default_factory=list)
+    contraindications_detail: list[ContraindicationItem] = Field(default_factory=list)
+    pharmacokinetic_profiles: list[PharmacokineticProfileItem] = Field(default_factory=list)
+    research_topics: list[ResearchTopicItem] = Field(default_factory=list)
+    claims: list[ClaimEvidenceItem] = Field(default_factory=list)
+    related_symptom_details: list[SymptomItem] = Field(default_factory=list)
 
 
 class HerbalRecommendationResponse(BaseModel):

@@ -46,7 +46,7 @@ def test_empty_evidence_maps_to_unavailable():
 def test_relevance_label_low_medium_high():
     assert resolve_relevance_label(0.8) == ("high", "Relevansi tinggi")
     assert resolve_relevance_label(0.5) == ("medium", "Relevansi sedang")
-    assert resolve_relevance_label(0.1) == ("low", "Relevansi rendah")
+    assert resolve_relevance_label(0.1) == ("initial", "Kandidat awal")
     assert resolve_relevance_label(0.0) == ("unknown", "Relevansi belum tersedia")
 
 
@@ -107,8 +107,8 @@ def test_options_alias_matches_recommendations():
 def test_low_confidence_candidate_label():
     level, label = resolve_relevance_label(0.19)
 
-    assert level == "low"
-    assert label == "Relevansi rendah"
+    assert level == "initial"
+    assert label == "Kandidat awal"
 
 
 def test_red_flag_detection_for_cough():

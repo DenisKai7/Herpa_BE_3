@@ -137,6 +137,16 @@ python -m data_pipeline.verify_graph
 
 Dataset contoh hanya untuk smoke test; jangan dianggap sebagai basis medis lengkap.
 
+Validasi schema enrichment v2 yang sudah ada tanpa mengubah data:
+
+```text
+1. Buka Neo4j Browser.
+2. Paste isi database/neo4j/validate_enrichment_v2.cypher.
+3. Jalankan per blok query untuk mengecek label, relasi, total herb, TraditionalUse, PreparationMethod, UsageGuideline, SafetyWarning, Claim, Evidence, Symptom, SymptomAlias, PopulationRisk, dan Audience.
+```
+
+Jangan menjalankan seed demo lama jika database sudah memakai `herpa_neo4j_full_enrichment_v2_SAFE_PATCHED`.
+
 ## Menjalankan dengan Docker
 
 MinIO dan backend saja:
