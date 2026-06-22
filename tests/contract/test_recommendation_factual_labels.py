@@ -1,19 +1,14 @@
 """Tests for herbal recommendation factual labels, scoring, and free-text complaints."""
-import math
-
-import pytest
 
 from app.logic.recommendation_orchestrator import (
-    clamp_score,
+    relevance_level_from_score,
     resolve_data_status,
     resolve_evidence_status,
     resolve_relevance_label,
-    resolve_safety_label,
     resolve_safety_status,
     score_to_percent,
-    relevance_level_from_score,
 )
-from app.models.recommendation import HerbalCandidate, HerbalRecommendationResponse, RecommendationScore
+from app.models.recommendation import HerbalCandidate, HerbalRecommendationResponse
 from app.services.recommendation.enrichment_mapper import remove_empty_items
 from app.services.recommendation.symptom_aliases import expand_symptoms
 from app.services.recommendation.symptom_expander import extract_recommendation_terms

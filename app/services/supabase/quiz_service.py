@@ -4,6 +4,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.core.exceptions import NotFoundError
+from app.repositories.quiz_repository import QuizRepository
 from app.services.supabase.client import SupabaseClient
 
 
@@ -11,6 +12,7 @@ class QuizService:
     def __init__(self, client: SupabaseClient):
         self.client = client
         self._attempts: dict[str, dict[str, Any]] = {}
+        self.repository = QuizRepository(client)
 
     @staticmethod
     def _now() -> str:
@@ -323,6 +325,41 @@ class QuizService:
                 prefer="resolution=merge-duplicates,return=minimal",
             )
         return result
+
+    async def new_progress(self, user_id: str) -> dict[str, Any]:
+        return await self.repository.get_progress(user_id)
+
+    async def topics(self, user_id: str) -> list[dict[str, Any]]:
+        return await self.repository.get_topics_with_progress(user_id)
+
+    async def create_session(self, user_id: str, topic_id: str, level_id: str | None, level_number: int | None):
+        from app.services.quiz.quiz_seed import get_fallback_questions, merge_and_dedupe_questions
+
+        level = await self.repository._find_level(topic_id, level_id=level_id, level_number=level_number or None)
+        if not level:
+            level = await self.repository._find_level(topic_id, level_number=level_number or 1)
+        if not level:
+            raise NotFoundError("Level quiz tidak ditemukan.")
+        level_id = level["id"]
+        level_number = int(level["level_number"])
+        questions = await self.repository.get_questions_for_level(level_id, topic_id)
+        fallback_questions = get_fallback_questions(topic_id, level_number)
+        questions = self.repository.dedupe_questions(merge_and_dedupe_questions(questions, fallback_questions))[:10]
+        if len(questions) < 10:
+            raise NotFoundError("Level belum memiliki minimal 10 soal aktif.")
+        return await self.repository.create_session(user_id, topic_id, level_id, questions)
+
+    async def get_session(self, user_id: str, session_id: str):
+        return await self.repository.get_session(user_id, session_id)
+
+    async def submit_session_answer(self, user_id: str, session_id: str, question_id: str, answer: Any):
+        return await self.repository.submit_answer(user_id, session_id, question_id, answer)
+
+    async def session_summary(self, user_id: str, session_id: str):
+        return await self.repository.get_summary(user_id, session_id)
+
+    async def new_history(self, user_id: str):
+        return await self.repository.get_history(user_id)
 
     async def history(self, user_id: str) -> list[dict[str, Any]]:
         if self.client.settings.allow_mock_services:
