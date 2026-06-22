@@ -309,45 +309,86 @@ LIMIT $limit
 
 HERBAL_RECOMMENDATION_LIGHT_LEGACY = """
 MATCH (h:Herb)-[:USED_FOR]->(u:TherapeuticUse)
-WHERE any(term IN $terms WHERE toLower(u.name) = toLower(term))
-   OR any(term IN $terms WHERE toLower(u.name) CONTAINS toLower(term))
+WHERE u.name_lc IN $expanded_terms
+   OR any(term IN $expanded_terms WHERE u.name_lc CONTAINS term)
+
 OPTIONAL MATCH (h)-[:HAS_COMPOUND]->(c:Compound)
 OPTIONAL MATCH (h)-[:HAS_WARNING]->(w:SafetyWarning)
 OPTIONAL MATCH (h)-[:HAS_INTERACTION]->(i:DrugInteraction)
 OPTIONAL MATCH (h)-[:HAS_CONTRAINDICATION]->(contra:Contraindication)
-WITH h,
-  collect(DISTINCT u.name)[0..5] AS matched_symptoms,
+
+WITH
+  h,
+  collect(DISTINCT u.name_lc) AS matched_use_lc,
+  collect(DISTINCT u.name)[0..6] AS matched_symptoms,
   collect(DISTINCT c.name)[0..8] AS active_compounds,
   count(DISTINCT w) AS warning_count,
   count(DISTINCT i) AS interaction_count,
-  count(DISTINCT contra) AS contraindication_count,
-  CASE
-    WHEN any(term IN $terms WHERE any(useName IN collect(DISTINCT u.name) WHERE toLower(useName) = toLower(term))) THEN 1.0
-    ELSE 0.55
-  END AS symptom_match_score
-WITH h, matched_symptoms, active_compounds, symptom_match_score,
+  count(DISTINCT contra) AS contraindication_count
+
+WITH
+  h,
+  matched_use_lc,
+  matched_symptoms,
+  active_compounds,
+  warning_count,
+  interaction_count,
+  contraindication_count,
+  size([term IN $primary_terms WHERE term IN matched_use_lc]) AS primary_hits,
+  size([term IN $expanded_terms WHERE term IN matched_use_lc]) AS expanded_hits,
+  size($primary_terms) AS primary_count,
+  size($expanded_terms) AS expanded_count
+
+WITH
+  h,
+  matched_symptoms,
+  active_compounds,
+  warning_count,
+  interaction_count,
+  contraindication_count,
+  CASE WHEN primary_count = 0 THEN 0.0 ELSE toFloat(primary_hits) / toFloat(primary_count) END AS primary_coverage_score,
+  CASE WHEN expanded_count = 0 THEN 0.0 ELSE toFloat(expanded_hits) / toFloat(expanded_count) END AS expanded_coverage_score,
   CASE WHEN size(active_compounds) > 0 THEN 1.0 ELSE 0.0 END AS compound_score,
   CASE
-    WHEN contraindication_count > 0 THEN 0.30
-    WHEN interaction_count > 0 THEN 0.45
-    WHEN warning_count > 0 THEN 0.60
-    ELSE 0.70
+    WHEN contraindication_count > 0 THEN 0.35
+    WHEN interaction_count > 0 THEN 0.50
+    WHEN warning_count > 0 THEN 0.65
+    ELSE 0.75
   END AS safety_score,
   CASE
     WHEN contraindication_count > 0 THEN 'caution'
     WHEN interaction_count > 0 THEN 'caution'
-    WHEN warning_count > 0 THEN 'caution'
+    WHEN warning_count > 0 THEN 'limited'
     ELSE coalesce(h.safety_status, 'unknown')
   END AS safety_status
-WITH h, matched_symptoms, active_compounds, symptom_match_score, compound_score, safety_score, safety_status,
-  (symptom_match_score * 0.65 + compound_score * 0.15 + safety_score * 0.20) AS score
-RETURN h.id AS herb_id,
+
+WITH
+  h,
+  matched_symptoms,
+  active_compounds,
+  safety_status,
+  primary_coverage_score,
+  expanded_coverage_score,
+  compound_score,
+  safety_score,
+  (
+    primary_coverage_score * 0.45
+    + expanded_coverage_score * 0.25
+    + compound_score * 0.10
+    + safety_score * 0.20
+  ) AS score
+
+RETURN
+  h.id AS herb_id,
   h.commonName AS local_name,
   coalesce(h.canonicalScientificName, h.latinName) AS scientific_name,
   matched_symptoms,
   active_compounds,
+  [] AS traditional_uses,
   safety_status,
-  symptom_match_score,
+  primary_coverage_score,
+  expanded_coverage_score,
+  0.0 AS traditional_use_score,
   compound_score,
   safety_score,
   score
@@ -379,6 +420,10 @@ LIMIT 1
 HERBAL_RECOMMENDATION_LIGHT_V3 = """
 MATCH (h:Herb)-[:MAY_HELP_WITH]->(s:Symptom)
 WHERE s.name_lc IN $expanded_terms
+   OR EXISTS {
+      MATCH (s)-[:HAS_ALIAS]->(a:SymptomAlias)
+      WHERE a.name_lc IN $expanded_terms
+   }
 OPTIONAL MATCH (s)-[:HAS_ALIAS]->(a:SymptomAlias)
 OPTIONAL MATCH (h)-[:HAS_COMPOUND]->(c:Compound)
 OPTIONAL MATCH (h)-[:HAS_TRADITIONAL_USE]->(tu:TraditionalUse)
@@ -397,8 +442,8 @@ WITH h,
   count(DISTINCT contra) AS contraindication_count,
   count(DISTINCT tox) AS toxicity_count
 WITH h, matched_symptom_lc, matched_symptoms, alias_lc, active_compounds, traditional_uses, warning_count, interaction_count, contraindication_count, toxicity_count,
-  size([term IN $primary_terms WHERE term IN matched_symptom_lc]) AS primary_direct_hits,
-  size([term IN $expanded_terms WHERE term IN matched_symptom_lc]) AS expanded_direct_hits,
+  size([term IN $primary_terms WHERE term IN matched_symptom_lc OR term IN alias_lc]) AS primary_direct_hits,
+  size([term IN $expanded_terms WHERE term IN matched_symptom_lc OR term IN alias_lc]) AS expanded_direct_hits,
   size($primary_terms) AS primary_count,
   size($expanded_terms) AS expanded_count
 WITH h, matched_symptoms, active_compounds, traditional_uses, warning_count, interaction_count, contraindication_count, toxicity_count,

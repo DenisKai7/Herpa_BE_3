@@ -312,6 +312,10 @@ class HerbalCandidate(BaseModel):
     relevance_level: RelevanceLevel = "unknown"
     relevance_status: str = "unknown"
     relevance_label: str = "Relevansi belum tersedia"
+    relevance_percent: int = Field(default=0, ge=0, le=100)
+    symptom_coverage_percent: int = Field(default=0, ge=0, le=100)
+    data_status: str = "limited"
+    data_status_label: str = "Data masih terbatas"
     safety_status: SafetyStatus = "unknown"
     safety_label: str = "Data keamanan belum cukup"
     safety_notes: list[str] = Field(default_factory=list)
@@ -390,6 +394,7 @@ class HerbalRecommendationResponse(BaseModel):
     when_to_seek_medical_help: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    suggested_terms: list[str] = Field(default_factory=list)
     safety_note: str = "Informasi ini bersifat edukatif dan bukan pengganti pemeriksaan tenaga kesehatan."
     metadata: dict[str, Any] = Field(default_factory=dict)
 

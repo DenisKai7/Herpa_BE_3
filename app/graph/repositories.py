@@ -346,22 +346,55 @@ class KnowledgeGraphRepository:
             rows = []
         if rows:
             return rows
+        # Fulltext fallback — guard against missing index
         try:
-            rows = await self.client.read(
-                HERBAL_RECOMMENDATION_FULLTEXT_FALLBACK,
-                {"fulltext_query": build_fulltext_query(expanded[:10]), "limit": max(1, min(limit, 20))},
-                timeout_seconds=5,
-                max_retries=0,
-            )
+            ft_status = await self.fulltext_index_status("symptom_alias_fulltext_idx")
+            if ft_status.get("exists") and ft_status.get("state") == "ONLINE":
+                rows = await self.client.read(
+                    HERBAL_RECOMMENDATION_FULLTEXT_FALLBACK,
+                    {"fulltext_query": build_fulltext_query(expanded[:10]), "limit": max(1, min(limit, 20))},
+                    timeout_seconds=5,
+                    max_retries=0,
+                )
+            else:
+                logger.warning(
+                    "symptom_alias_fulltext_idx_missing_skip_fulltext_fallback",
+                    extra={"index_status": ft_status},
+                )
+                rows = []
         except Exception:
             logger.exception("recommend_herbs_fulltext_fallback_failed", extra={"term_count": len(expanded)})
             rows = []
         if rows:
             return rows
         try:
-            return await self.recommend_herbs_light(expanded[:10], limit=limit)
+            return await self.recommend_herbs_legacy_v2(primary, expanded, limit=limit)
         except Exception:
             logger.exception("recommend_herbs_legacy_failed", extra={"term_count": len(expanded)})
+            return []
+
+    async def recommend_herbs_legacy_v2(
+        self, primary_terms: list[str], expanded_terms: list[str], limit: int = 8
+    ) -> list[dict[str, Any]]:
+        """Legacy fallback using TherapeuticUse — expects primary_terms + expanded_terms params."""
+        clean_primary = [t.strip() for t in primary_terms if t and t.strip()][:5]
+        clean_expanded = [t.strip() for t in expanded_terms if t and t.strip()][:15]
+        if not clean_expanded:
+            return []
+        params = {
+            "primary_terms": clean_primary,
+            "expanded_terms": clean_expanded,
+            "limit": max(1, min(limit, 20)),
+        }
+        try:
+            return await self.client.read(
+                HERBAL_RECOMMENDATION_LIGHT_LEGACY,
+                params,
+                timeout_seconds=self.settings.neo4j_query_timeout_seconds,
+                max_retries=0,
+            )
+        except Exception:
+            logger.exception("neo4j_light_legacy_v2_failed", extra={"term_count": len(clean_expanded)})
             return []
 
     async def recommend_herbs_light(self, terms: list[str], limit: int = 8) -> list[dict[str, Any]]:

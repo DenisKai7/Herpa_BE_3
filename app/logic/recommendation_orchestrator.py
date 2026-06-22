@@ -73,6 +73,23 @@ def clamp_score(value: object, default: float = 0.0) -> float:
     return max(0.0, min(number, 1.0))
 
 
+def score_to_percent(value: float) -> int:
+    return round(clamp_score(value) * 100)
+
+
+def relevance_level_from_score(score: float) -> tuple[str, str]:
+    score = clamp_score(score)
+    if score >= 0.75:
+        return "high", "Relevansi tinggi"
+    if score >= 0.50:
+        return "medium", "Relevansi sedang"
+    if score >= 0.25:
+        return "low", "Relevansi rendah"
+    if score > 0:
+        return "initial", "Kandidat awal"
+    return "unknown", "Relevansi belum tersedia"
+
+
 def extract_symptoms_from_complaint(complaint: str) -> list[str]:
     normalized = " ".join(complaint.lower().strip().split())
     if not normalized:
@@ -141,17 +158,29 @@ def resolve_evidence_status(
     return "unavailable", "Data bukti belum tersedia"
 
 
+def resolve_data_status(candidate: dict[str, Any]) -> tuple[str, str]:
+    """Determine factual data status label for a recommendation card."""
+    has_traditional = bool(candidate.get("traditional_uses"))
+    has_compounds = bool(candidate.get("active_compounds"))
+    has_sources = bool(candidate.get("evidence_sources") or candidate.get("sources"))
+    has_detail = bool(candidate.get("has_detail_data"))
+
+    if has_sources:
+        return "source_available", "Data sumber tersedia"
+    if has_traditional and has_compounds:
+        return "kg_supported", "Didukung data knowledge graph"
+    if has_traditional:
+        return "traditional_available", "Data tradisional tersedia"
+    if has_compounds:
+        return "compound_available", "Data senyawa tersedia"
+    if has_detail:
+        return "detail_available", "Data detail tersedia"
+    return "limited", "Data masih terbatas"
+
+
 def resolve_relevance_label(score: float) -> tuple[str, str]:
-    score = clamp_score(score)
-    if score >= 0.75:
-        return "high", "Relevansi tinggi"
-    if score >= 0.50:
-        return "medium", "Relevansi sedang"
-    if score >= 0.25:
-        return "low", "Relevansi rendah"
-    if score > 0:
-        return "initial", "Kandidat awal"
-    return "unknown", "Relevansi belum tersedia"
+    """Alias for relevance_level_from_score — kept for backward compatibility."""
+    return relevance_level_from_score(score)
 
 
 def build_recommendation_explanation(
@@ -461,6 +490,17 @@ class RecommendationOrchestrator:
                     + safety_score * 0.15
                 )
             relevance_level, relevance_label = resolve_relevance_label(confidence)
+            relevance_percent = score_to_percent(confidence)
+            symptom_coverage_percent = score_to_percent(symptom_match_score)
+            # Resolve factual data status
+            data_status_input = {
+                "traditional_uses": row_traditional_uses or enrichment.get("traditional_uses"),
+                "active_compounds": active_compounds,
+                "evidence_sources": sources_raw,
+                "sources": sources_raw,
+                "has_detail_data": bool(enrichment.get("traditional_uses") or enrichment.get("preparation_methods")),
+            }
+            data_status, data_status_label = resolve_data_status(data_status_input)
             if self.settings.herbal_recommendation_light_analyze and "score" in row:
                 explanation = build_light_explanation(row, confidence)
                 match_reasons = build_match_reasons(row)
@@ -511,6 +551,10 @@ class RecommendationOrchestrator:
                 relevance_level=relevance_level,
                 relevance_status="exact_match" if symptom_match_score >= 0.99 else "partial_match" if symptom_match_score >= 0.5 else "low_relevance",
                 relevance_label=relevance_label,
+                relevance_percent=relevance_percent,
+                symptom_coverage_percent=symptom_coverage_percent,
+                data_status=data_status,
+                data_status_label=data_status_label,
                 safety_status=safety_status,
                 safety_label=safety_label,
                 safety_notes=safety_notes,
@@ -542,7 +586,7 @@ class RecommendationOrchestrator:
                 model_assisted_coverage_score=0.0,
                 safety_coverage_score=safety_score,
                 overall_verification_status="source_verified" if sources_raw else "insufficient_data",
-                safety_data_status="complete" if safety_status in {"safe", "caution", "unsafe"} else "missing",
+                safety_data_status="complete" if safety_status in {"safe", "caution", "unsafe"} else "limited",
                 general_safety_warnings=safety_notes,
                 enrichment=HerbEnrichmentDetail.model_validate(enrichment),
                 traditional_uses=enrichment.get("traditional_uses", []) or [{"title": title} for title in _string_list(row.get("traditional_uses"))],
@@ -574,8 +618,18 @@ class RecommendationOrchestrator:
         status = "completed"
         limitations = [] if candidates else ["Data rekomendasi masih terbatas dan perlu pengayaan lebih lanjut."]
         warnings = []
+        suggested_terms: list[str] = []
         if not candidates:
-            warnings.append("Rekomendasi belum dapat dimuat karena koneksi knowledge graph sedang lambat atau data kandidat belum tersedia.")
+            warnings.append(
+                "Belum ditemukan kandidat herbal yang cukup relevan pada knowledge graph untuk keluhan ini."
+            )
+            suggested_terms = expanded_symptoms[:5] if expanded_symptoms else primary_terms[:5]
+            if not suggested_terms:
+                suggested_terms = payload.symptoms[:3]
+            limitations.append(
+                "Keluhan awam mungkin perlu dipetakan ke istilah yang lebih spesifik. "
+                "Coba gunakan istilah lain seperti: " + ", ".join(suggested_terms[:3]) + "."
+            )
         elif any(c.safety_status == "caution" for c in candidates):
             warnings.append("Beberapa kandidat herbal memerlukan perhatian khusus (caution) sebelum digunakan.")
         medical_advice = [COUGH_MEDICAL_ADVICE] if any("batuk" in item or "tenggorokan" in item for item in payload.symptoms) else []
@@ -593,6 +647,7 @@ class RecommendationOrchestrator:
             when_to_seek_medical_help=medical_advice,
             limitations=limitations,
             warnings=warnings,
+            suggested_terms=suggested_terms,
             total_candidates_found=len(rows),
             total_candidates_eligible=len(candidates),
             total_candidates_excluded=len(excluded),

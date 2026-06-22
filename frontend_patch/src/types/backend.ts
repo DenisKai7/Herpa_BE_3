@@ -101,6 +101,17 @@ export type HerbalRecommendationItem = {
   confidence?: number;
   relevance_score?: number;
   recommendation_score?: number;
+  relevance_level?: string;
+  relevance_label?: string;
+  relevance_percent?: number;
+  symptom_coverage?: number;
+  symptom_coverage_percent?: number;
+  data_status?: string;
+  data_status_label?: string;
+  safety_status?: string;
+  safety_label?: string;
+  evidence_status?: string;
+  evidence_label?: string;
   primary_coverage_score?: number;
   expanded_coverage_score?: number;
   traditional_use_score?: number;
@@ -129,6 +140,27 @@ export type HerbalRecommendationItem = {
   research_topics?: ResearchTopicItem[];
   claims?: ClaimEvidenceItem[];
   related_symptom_details?: SymptomItem[];
+};
+
+export type HerbalRecommendationResponse = {
+  status: string;
+  request_id?: string | null;
+  complaint?: string;
+  normalized_complaint?: string;
+  symptoms?: string[];
+  extracted_symptoms?: string[];
+  recommendations?: HerbalRecommendationItem[];
+  options?: HerbalRecommendationItem[];
+  red_flags?: string[];
+  when_to_seek_medical_help?: string[];
+  limitations?: string[];
+  warnings?: string[];
+  suggested_terms?: string[];
+  medical_attention_message?: string | null;
+  disclaimer?: string;
+  general_disclaimer?: string;
+  safety_note?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export interface ChatResponse {
