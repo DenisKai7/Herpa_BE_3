@@ -7,7 +7,7 @@ QUIZ_LEVEL_TYPES = {
     2: "matching",
     3: "true_false",
     4: "short_answer",
-    5: "case_based",
+    5: "case_study",
 }
 
 TOPIC_TITLES = [
@@ -61,11 +61,46 @@ DETAILED_BANKS: dict[str, dict[int, list[dict[str, Any]]]] = {
             {"prompt": "Apa nama kolom vertikal pada tabel periodik?", "answer": "golongan", "accepted": ["group"], "explanation": "Kolom vertikal disebut golongan."},
         ],
         5: [
-            {"prompt": "Seorang siswa membandingkan Na dan Cl. Na mudah melepas elektron, sedangkan Cl cenderung menerima elektron. Penjelasan paling tepat adalah...", "options": ["Na dan Cl berada pada golongan yang sama", "Na adalah logam alkali dan Cl adalah halogen", "Na memiliki massa atom lebih besar", "Cl tidak memiliki elektron valensi"], "answer": "B", "explanation": "Na sebagai logam alkali cenderung melepas elektron; Cl sebagai halogen cenderung menerima elektron."},
-            {"prompt": "Unsur X berada di golongan 18. Dalam kondisi umum, unsur X cenderung...", "options": ["sangat mudah membentuk ion +1", "relatif stabil", "selalu menjadi halogen", "memiliki satu elektron valensi"], "answer": "B", "explanation": "Golongan 18 adalah gas mulia yang relatif stabil."},
-            {"prompt": "Unsur Y satu periode dengan Mg tetapi berada lebih kanan. Jari-jari atom Y dibanding Mg cenderung...", "options": ["lebih besar", "lebih kecil", "sama persis", "tidak dapat diprediksi"], "answer": "B", "explanation": "Jari-jari atom mengecil dari kiri ke kanan dalam satu periode."},
-            {"prompt": "Senyawa garam dapur terbentuk dari Na dan Cl karena...", "options": ["keduanya gas mulia", "Na melepas elektron dan Cl menerima elektron", "keduanya nonlogam", "Cl melepas elektron ke Na"], "answer": "B", "explanation": "Transfer elektron membentuk ion Na+ dan Cl-."},
-            {"prompt": "Jika unsur memiliki 7 elektron valensi, unsur itu kemungkinan termasuk...", "options": ["alkali", "alkali tanah", "halogen", "gas mulia"], "answer": "C", "explanation": "Halogen memiliki 7 elektron valensi."},
+            {
+                "prompt": "Seorang siswa membandingkan kereaktifan Na dan Ne yang berada dalam satu periode. Jelaskan perbedaan kereaktifan kimia antara natrium (Na) dan neon (Ne) beserta konsep kuncinya.",
+                "case_context": "Natrium (Na) bereaksi hebat saat dimasukkan ke dalam air, sedangkan neon (Ne) tidak menunjukkan reaksi apa pun meskipun berada pada periode yang sama.",
+                "keywords": ["elektron valensi", "golongan", "gas mulia", "logam alkali", "stabil"],
+                "min_keywords": 2,
+                "model_answer": "Natrium adalah logam alkali golongan 1 dengan 1 elektron valensi sehingga sangat tidak stabil dan reaktif. Neon adalah gas mulia golongan 18 dengan konfigurasi elektron stabil (oktet) sehingga tidak reaktif.",
+                "explanation": "Perbedaan kereaktifan dipengaruhi konfigurasi elektron kulit terluar (elektron valensi). Na mudah melepas elektron, sedangkan Ne sudah stabil.",
+            },
+            {
+                "prompt": "Mengapa jari-jari atom klorin (Cl) lebih kecil dibandingkan dengan natrium (Na) padahal keduanya berada dalam periode yang sama?",
+                "case_context": "Data eksperimen menunjukkan jari-jari atom natrium (Na) adalah 186 pm, sedangkan jari-jari atom klorin (Cl) adalah 99 pm.",
+                "keywords": ["muatan inti efektif", "proton", "gaya tarik", "kulit elektron", "inti atom"],
+                "min_keywords": 2,
+                "model_answer": "Cl memiliki jumlah proton (muatan inti efektif) lebih banyak dibanding Na pada jumlah kulit yang sama, sehingga gaya tarik inti terhadap elektron terluar lebih kuat dan menarik elektron lebih dekat ke inti.",
+                "explanation": "Dalam satu periode, bertambahnya proton meningkatkan muatan inti efektif, memperkuat tarikan elektron terluar, sehingga jari-jari mengecil.",
+            },
+            {
+                "prompt": "Jelaskan pembentukan ikatan antara unsur natrium (Na) dan klorin (Cl) dalam pembentukan garam dapur (NaCl) dari sudut pandang transfer elektron.",
+                "case_context": "Natrium klorida (NaCl) terbentuk dengan mudah melalui reaksi antara logam natrium yang sangat reaktif dan gas klorin yang beracun.",
+                "keywords": ["transfer elektron", "ion", "melepas", "menerima", "ikatan ion"],
+                "min_keywords": 2,
+                "model_answer": "Atom Na memiliki 1 elektron valensi dan cenderung melepas elektron menjadi kation Na+. Atom Cl memiliki 7 elektron valensi dan cenderung menerima elektron menjadi anion Cl-. Terjadi transfer elektron yang membentuk ikatan ion.",
+                "explanation": "Ikatan ionik pada NaCl terbentuk dari gaya elektrostatik antara ion Na+ dan Cl- yang dihasilkan dari proses transfer elektron.",
+            },
+            {
+                "prompt": "Jelaskan karakteristik golongan halogen (Golongan 17) dalam tabel periodik dan mengapa mereka sangat cenderung membentuk senyawa dengan logam alkali.",
+                "case_context": "Halogen seperti fluorin dan klorin sangat reaktif dan dapat langsung bereaksi dengan logam alkali membentuk garam halida.",
+                "keywords": ["elektron valensi", "menerima", "alkali", "stabil", "oktet"],
+                "min_keywords": 2,
+                "model_answer": "Halogen memiliki 7 elektron valensi, membutuhkan 1 elektron tambahan untuk mencapai konfigurasi oktet stabil. Logam alkali memiliki 1 elektron valensi yang siap dilepaskan, sehingga keduanya sangat mudah bereaksi.",
+                "explanation": "Halogen memiliki keelektronegatifan tinggi dan hanya butuh 1 elektron untuk stabil, berpasangan sempurna dengan logam alkali yang cenderung melepas 1 elektron.",
+            },
+            {
+                "prompt": "Jelaskan mengapa gas mulia (Golongan 18) berada dalam kondisi gas monoatomik dan sulit bereaksi dengan unsur lain pada kondisi standar.",
+                "case_context": "Gas mulia seperti helium dan argon ditemukan di alam sebagai atom bebas tunggal (monoatomik) dan tidak mudah membentuk senyawa kimia.",
+                "keywords": ["stabil", "elektron valensi", "oktet", "duplet", "penuh"],
+                "min_keywords": 2,
+                "model_answer": "Gas mulia memiliki kulit elektron terluar yang penuh (oktet/duplet) sehingga energinya sangat stabil. Mereka tidak cenderung melepas, menerima, atau berbagi elektron dengan unsur lain.",
+                "explanation": "Konfigurasi elektron yang terisi penuh memberikan kestabilan tinggi sehingga gas mulia bersifat inert dan berada sebagai monoatomik.",
+            },
         ],
     },
 }
@@ -79,7 +114,49 @@ DETAILED_BANKS["struktur-atom"] = {
         {"prompt": "Isotop adalah atom yang memiliki jumlah proton sama tetapi berbeda jumlah...", "options": ["elektron valensi", "neutron", "kulit", "ion"], "answer": "B", "explanation": "Isotop berbeda pada jumlah neutron."},
         {"prompt": "Nomor massa adalah jumlah...", "options": ["proton + neutron", "proton + elektron", "neutron + elektron", "elektron valensi"], "answer": "A", "explanation": "Nomor massa = proton + neutron."},
     ],
-    2: [], 3: [], 4: [], 5: [],
+    2: [], 3: [], 4: [],
+    5: [
+        {
+            "prompt": "Jelaskan perbedaan mendasar antara isotop karbon-12 dan karbon-14 dari sudut pandang partikel penyusun inti atomnya.",
+            "case_context": "Karbon-12 merupakan isotop karbon yang stabil dan melimpah, sedangkan karbon-14 bersifat radioaktif dan digunakan untuk penanggalan arkeologi.",
+            "keywords": ["neutron", "proton", "inti atom", "nomor massa", "radioaktif"],
+            "min_keywords": 2,
+            "model_answer": "Kedua isotop memiliki jumlah proton yang sama yaitu 6. Karbon-12 memiliki 6 neutron (nomor massa 12), sedangkan karbon-14 memiliki 8 neutron (nomor massa 14) di dalam inti atomnya.",
+            "explanation": "Isotop adalah atom dari unsur yang sama dengan jumlah proton sama tetapi jumlah neutron berbeda.",
+        },
+        {
+            "prompt": "Jelaskan bagaimana model atom Niels Bohr menyempurnakan kelemahan model atom Rutherford terkait kestabilan orbit elektron.",
+            "case_context": "Rutherford mengusulkan elektron mengorbit inti seperti planet, tetapi menurut fisika klasik elektron tersebut seharusnya terus memancarkan energi dan jatuh ke inti.",
+            "keywords": ["lintasan stasioner", "tingkat energi", "orbit", "memancarkan", "menyerap"],
+            "min_keywords": 2,
+            "model_answer": "Bohr mengusulkan bahwa elektron mengorbit inti pada tingkat energi atau lintasan stasioner tertentu tanpa memancarkan radiasi energi. Elektron hanya memancarkan atau menyerap energi jika berpindah lintasan.",
+            "explanation": "Model Bohr memperkenalkan konsep kuantisasi tingkat energi orbit elektron untuk menjelaskan kestabilan atom.",
+        },
+        {
+            "prompt": "Jelaskan hubungan antara nomor atom, jumlah proton, dan jumlah elektron pada suatu atom netral serta apa yang terjadi jika atom tersebut kehilangan elektron.",
+            "case_context": "Atom magnesium netral memiliki nomor atom 12. Namun, di alam sering dijumpai dalam bentuk ion Mg2+.",
+            "keywords": ["proton", "elektron", "ion", "positif", "kehilangan"],
+            "min_keywords": 2,
+            "model_answer": "Pada atom netral, nomor atom sama dengan jumlah proton and jumlah elektron. Jika atom kehilangan elektron, jumlah proton menjadi lebih banyak dari elektron sehingga membentuk ion positif (kation).",
+            "explanation": "Kehilangan elektron menghasilkan ketidakseimbangan muatan sehingga terbentuk kation bermuatan positif.",
+        },
+        {
+            "prompt": "Jelaskan peranan neutron di dalam inti atom dan mengapa inti atom yang memiliki terlalu banyak atau terlalu sedikit neutron cenderung tidak stabil.",
+            "case_context": "Gaya repulsi elektromagnetik antar proton yang bermuatan positif di dalam inti sangat besar, tetapi inti atom tidak pecah.",
+            "keywords": ["gaya nuklir kuat", "proton", "repulsi", "tidak stabil", "radioaktif"],
+            "min_keywords": 2,
+            "model_answer": "Neutron berfungsi sebagai perekat yang menghasilkan gaya nuklir kuat untuk mengatasi gaya repulsi elektrostatik antar proton. Ketidakseimbangan rasio neutron/proton membuat inti atom tidak stabil dan bersifat radioaktif.",
+            "explanation": "Gaya nuklir kuat antar nukleon (proton dan neutron) menjaga keutuhan inti atom dari gaya tolak-menolak proton.",
+        },
+        {
+            "prompt": "Jelaskan perbedaan muatan dan massa dari tiga partikel subatom penyusun atom (proton, neutron, dan elektron).",
+            "case_context": "Struktur atom terdiri dari inti yang padat dikelilingi oleh ruang hampa berisi elektron.",
+            "keywords": ["muatan", "massa", "proton", "neutron", "elektron"],
+            "min_keywords": 3,
+            "model_answer": "Proton bermuatan positif (+1) dan memiliki massa signifikan (~1 sma). Neutron tidak bermuatan (netral) dengan massa ~1 sma. Elektron bermuatan negatif (-1) dengan massa yang sangat kecil (dapat diabaikan).",
+            "explanation": "Proton dan neutron membentuk massa inti atom, sedangkan elektron berkontribusi pada volume atom.",
+        },
+    ]
 }
 DETAILED_BANKS["ikatan-kimia"] = {
     1: [
@@ -138,6 +215,19 @@ def _generic_question(topic_id: str, topic_title: str, level_id: str, level_numb
         return common | {"prompt": f"Pernyataan nomor {index}: {topic_title} adalah salah satu topik pembelajaran kimia.", "options": [], "correct_answer": True, "matching_pairs": [], "explanation": "Pernyataan benar."}
     if quiz_type == "short_answer":
         return common | {"prompt": f"Jawaban singkat nomor {index}: bidang ilmu utama untuk topik {topic_title} adalah?", "options": [], "correct_answer": {"answer": "kimia", "accepted_answers": ["chemistry"]}, "matching_pairs": [], "explanation": "Jawaban singkat: kimia."}
+    if quiz_type == "case_study":
+        return common | {
+            "prompt": f"Studi kasus {index}: Siswa menganalisis konsep {topic_title}. Jelaskan konsep kunci dan mengapa hal tersebut penting.",
+            "options": [],
+            "matching_pairs": [],
+            "correct_answer": {
+                "required_keywords": [topic_title.lower(), "kimia"],
+                "min_keywords": 1,
+                "answer": f"Konsep kunci dalam {topic_title} berkaitan dengan prinsip dasar kimia.",
+            },
+            "metadata": {"case_context": f"Sebuah analisis tentang topik {topic_title} dilakukan dalam laboratorium kimia medis."},
+            "explanation": f"{topic_title} termasuk materi kimia yang penting dipahami.",
+        }
     return common | {"prompt": f"Studi kasus nomor {index}: siswa menganalisis konsep {topic_title}. Bidang ilmu yang paling tepat adalah...", "options": _option_list(["kimia", "sosiologi", "geologi", "ekonomi"]), "correct_answer": "A", "matching_pairs": [], "explanation": "Kasus tersebut berkaitan dengan konsep kimia."}
 
 
@@ -147,8 +237,19 @@ def _from_bank(topic_id: str, topic_title: str, level_id: str, level_number: int
     for index, item in enumerate(bank, start=1):
         quiz_type = QUIZ_LEVEL_TYPES[level_number]
         base = {"id": f"{level_id}-q{index}", "topic_id": topic_id, "level_id": level_id, "question_type": quiz_type, "prompt": item["prompt"], "explanation": item.get("explanation"), "difficulty": "easy" if level_number <= 2 else "medium" if level_number <= 4 else "hard", "order_index": index, "is_active": True}
-        if quiz_type in {"multiple_choice", "case_based"}:
+        if quiz_type in {"multiple_choice"}:
             questions.append(base | {"options": _option_list(item["options"]), "correct_answer": item["answer"], "matching_pairs": []})
+        elif quiz_type == "case_study":
+            questions.append(base | {
+                "options": [],
+                "matching_pairs": [],
+                "correct_answer": {
+                    "required_keywords": item.get("keywords", []),
+                    "min_keywords": item.get("min_keywords", 2),
+                    "answer": item.get("model_answer", "") or item.get("answer", ""),
+                },
+                "metadata": {"case_context": item.get("case_context", "")},
+            })
         elif quiz_type == "matching":
             questions.append(base | {"options": [], "matching_pairs": _pair_list(item["pairs"]), "correct_answer": item["pairs"]})
         elif quiz_type == "true_false":

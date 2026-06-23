@@ -15,6 +15,7 @@ from app.services.quiz.quiz_engine import (
     is_answer_correct,
     is_level_unlocked,
     normalize_answer,
+    match_case_keywords,
 )
 from app.services.quiz.quiz_seed import QUIZ_SEED_TOPICS
 from app.services.supabase.client import SupabaseClient
@@ -765,6 +766,9 @@ class QuizRepository:
         question_type = orig_question_type
         if question_type == "case_study":
             question_type = "case_based"
+        stored_qtype = "case_study" if orig_question_type == "case_study" else question_type
+        matched_keywords = []
+        required_keywords = []
 
         # Dispatch user answer and format depending on question type
         resolved_user_answer = user_answer
@@ -782,6 +786,12 @@ class QuizRepository:
                 resolved_user_answer = user_answer
             elif selected_option_id is not None:
                 resolved_user_answer = selected_option_id
+
+        if orig_question_type in {"case_study", "case_based"} and not question.get("options"):
+            text_ans = str(resolved_user_answer or "").strip()
+            if not text_ans or len(text_ans) < 10:
+                from fastapi import HTTPException
+                raise HTTPException(status_code=400, detail="Jawaban studi kasus terlalu pendek.")
 
         option = None
         correct_option = None
@@ -889,21 +899,24 @@ class QuizRepository:
 
                 if correct_answer in (None, "") and correct_option:
                     correct_answer = correct_option.get("text") or correct_option.get("label")
-                stored_qtype = "case_study" if orig_question_type == "case_study" else question_type
                 normalized_answer = {
                     "question_type": stored_qtype,
                     "selected_option_id": str(option["id"]),
                     "selected_option_key": option.get("option_key"),
                 }
             else:
-                correct = is_answer_correct(question_type, question["correct_answer"], resolved_user_answer, question.get("accepted_answers"))
-                stored_qtype = "case_study" if orig_question_type == "case_study" else question_type
                 if stored_qtype in {"case_study", "case_based"}:
+                    correct, matched_keywords, required_keywords = match_case_keywords(question.get("correct_answer"), str(resolved_user_answer or ""))
                     normalized_answer = {
                         "question_type": stored_qtype,
                         "answer_text": str(resolved_user_answer or "").strip(),
+                        "matched_keywords": matched_keywords,
+                        "required_keywords": required_keywords,
                     }
+                    if isinstance(question.get("correct_answer"), dict):
+                        formatted_correct_answer = question.get("correct_answer").get("answer") or question.get("correct_answer").get("value") or question.get("correct_answer").get("correct")
                 else:
+                    correct = is_answer_correct(question_type, question["correct_answer"], resolved_user_answer, question.get("accepted_answers"))
                     normalized_answer = {
                         "question_type": stored_qtype,
                         "selected_option_id": str(resolved_user_answer) if resolved_user_answer is not None else None,
@@ -938,8 +951,10 @@ class QuizRepository:
             "correct_answer": correct_answer,
             "accepted_answers": accepted_answers,
             "formatted_correct_answer": formatted_correct_answer or correct_answer,
-            "question_type": question_type,
-            "answer_text": response_answer_text,
+            "question_type": stored_qtype,
+            "answer_text": response_answer_text or (resolved_user_answer if not option else None),
+            "matched_keywords": matched_keywords,
+            "required_keywords": required_keywords,
             "explanation": question.get("explanation"),
             "current_question_index": completion.get("current_question_index"),
             "next_question_index": completion.get("current_question_index"),

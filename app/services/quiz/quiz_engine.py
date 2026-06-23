@@ -137,3 +137,18 @@ def is_answer_correct(
             return match_count >= min_keywords
         return normalize_text(user_answer) == normalize_text(expected)
     return False
+
+
+def match_case_keywords(correct_answer: Any, user_answer: str) -> tuple[bool, list[str], list[str]]:
+    """Returns (is_correct, matched_keywords, required_keywords)."""
+    if isinstance(correct_answer, dict):
+        keywords = correct_answer.get("required_keywords") or correct_answer.get("keywords") or correct_answer.get("accepted_answers", [])
+        min_keywords = correct_answer.get("min_keywords", 1)
+    else:
+        keywords = extract_accepted_answers(correct_answer)
+        min_keywords = 1
+    if not user_answer or not keywords:
+        return False, [], keywords
+    user_normalized = normalize_text(user_answer)
+    matched = [kw for kw in keywords if normalize_text(kw) and normalize_text(kw) in user_normalized]
+    return len(matched) >= min_keywords, matched, keywords

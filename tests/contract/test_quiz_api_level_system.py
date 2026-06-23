@@ -43,8 +43,10 @@ def quiz_client():
 
 def _answer_for(question: dict):
     qtype = question["question_type"]
-    if qtype in {"multiple_choice", "case_based"}:
+    if qtype in {"multiple_choice"}:
         return "A"
+    if qtype in {"case_based", "case_study"}:
+        return "kimia unsur golongan orbital atom"
     if qtype == "matching":
         return question["matching_pairs"]
     if qtype == "true_false":
@@ -78,10 +80,16 @@ def _complete_session(client: TestClient, service: QuizService, topic_id: str = 
     for question in session["questions"]:
         raw_question = raw_questions[question["id"]]
         payload = {"question_id": question["id"], "answer": _correct_answer(raw_question)}
-        if question["question_type"] in {"multiple_choice", "case_based"}:
+        if question["question_type"] in {"multiple_choice"}:
             payload = {
                 "question_id": question["id"],
                 "selected_option_id": _correct_option_id(question, raw_question),
+                "elapsed_ms": 100,
+            }
+        elif question["question_type"] in {"case_based", "case_study"}:
+            payload = {
+                "question_id": question["id"],
+                "answer_text": "kimia unsur golongan orbital atom",
                 "elapsed_ms": 100,
             }
         client.post(f"/api/quiz/sessions/{session['id']}/answer", json=payload)
@@ -138,10 +146,10 @@ def test_level_4_is_short_answer(quiz_client):
     assert levels[3]["quiz_type"] == "short_answer"
 
 
-def test_level_5_is_case_based(quiz_client):
+def test_level_5_is_case_study(quiz_client):
     client, _ = quiz_client
     levels = client.get("/api/quiz/topics").json()["topics"][0]["levels"]
-    assert levels[4]["quiz_type"] == "case_based"
+    assert levels[4]["quiz_type"] == "case_study"
 
 
 def test_start_session_returns_5_questions(quiz_client):
@@ -558,3 +566,78 @@ def test_history_includes_active_continue_without_empty_duplicate_after_completi
     rows = client.get("/api/quiz/history").json()["history"]
     assert any(row["session_id"] == completed["id"] and row["status"] == "completed" for row in rows)
     assert not any(row["session_id"] == active["id"] and row["status"] == "active" for row in rows)
+
+
+def test_submit_case_study_answer(quiz_client):
+    client, service = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "tabel-periodik", "level_number": 5}).json()
+    question = session["questions"][0]
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={
+            "question_id": question["id"],
+            "answer_text": "Senyawa ini memiliki elektron valensi yang stabil karena termasuk gas mulia.",
+            "elapsed_ms": 500,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["correct"] is True
+    assert data["is_correct"] is True
+    assert "elektron valensi" in data["matched_keywords"]
+    assert "gas mulia" in data["matched_keywords"]
+
+
+def test_submit_case_study_answer_incorrect(quiz_client):
+    client, _ = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "tabel-periodik", "level_number": 5}).json()
+    question = session["questions"][0]
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={
+            "question_id": question["id"],
+            "answer_text": "Saya tidak tahu konsep apa ini sama sekali.",
+            "elapsed_ms": 500,
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["correct"] is False
+    assert data["is_correct"] is False
+
+
+def test_submit_case_study_too_short(quiz_client):
+    client, _ = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "tabel-periodik", "level_number": 5}).json()
+    question = session["questions"][0]
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={
+            "question_id": question["id"],
+            "answer_text": "Pendek",
+            "elapsed_ms": 500,
+        },
+    )
+    assert response.status_code == 400
+    assert "Jawaban studi kasus terlalu pendek" in response.json()["detail"]
+
+
+def test_all_17_topics_level_5(quiz_client):
+    client, service = quiz_client
+    topics = client.get("/api/quiz/topics").json()["topics"]
+    assert len(topics) == 17
+    for topic in topics:
+        session = client.post("/api/quiz/sessions", json={"topic_id": topic["id"], "level_number": 5}).json()
+        assert len(session["questions"]) == 10
+        raw_questions = {q["id"]: q for q in service.repository._sessions[session["id"]]["questions"]}
+        for question in session["questions"]:
+            assert question["question_type"] == "case_study"
+            raw_question = raw_questions[question["id"]]
+            kws = raw_question["correct_answer"]["required_keywords"]
+            ans_text = " ".join(kws)
+            response = client.post(
+                f"/api/quiz/sessions/{session['id']}/answer",
+                json={"question_id": question["id"], "answer_text": ans_text},
+            ).json()
+            assert response["correct"] is True
+            assert response["is_correct"] is True
