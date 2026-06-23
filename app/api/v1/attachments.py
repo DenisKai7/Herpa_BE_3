@@ -63,7 +63,7 @@ async def retry(
     user: CurrentUser = Depends(get_current_user),
     services: Services = Depends(get_services),
 ) -> AttachmentStatusResponse:
-    return await services.attachments.status(user.id, attachment_id)
+    return await services.attachments.retry(user.id, attachment_id)
 
 
 @router.delete("/api/v1/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
+import asyncio
 from typing import Any
 from uuid import uuid4
 
 from fastapi import UploadFile
 
 from app.core.config import Settings
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, AppError
 from app.models.attachment import (
     AttachmentCompleteRequest,
     AttachmentInfo,
@@ -141,10 +142,36 @@ class AttachmentOrchestrator:
             expires_in=self.settings.presigned_url_expiry_seconds,
         )
 
+    async def _update_status(self, attachment_id: str, user_id: str, status: str, error: str | None = None) -> None:
+        update = {"processing_status": status}
+        if error:
+            update["extraction_metadata"] = {"error": error}
+        if self.db.settings.allow_mock_services:
+            if attachment_id in self._mock:
+                self._mock[attachment_id].update(update)
+        else:
+            await self.db.update(
+                "attachments", {"id": f"eq.{attachment_id}", "user_id": f"eq.{user_id}"}, update
+            )
+
+    async def _process_safe(self, row: dict[str, Any], data: bytes, query: str) -> None:
+        try:
+            await self._process(row, data, query)
+        except AppError as exc:
+            await self._update_status(row["id"], row["user_id"], "failed", str(exc.message))
+        except Exception:
+            await self._update_status(row["id"], row["user_id"], "failed", "Pemrosesan file gagal.")
+
     async def _process(self, row: dict[str, Any], data: bytes, query: str) -> dict[str, Any]:
         extracted = self.extractor.extract(data, row["mime_type"])
         if extracted.get("needs_vision"):
-            extracted = await self.image.analyze(data, row["mime_type"], query)
+            try:
+                extracted = await self.image.analyze(data, row["mime_type"], query)
+            except AppError as exc:
+                extracted = {"text": "", "needs_vision": True, "vision_error": str(exc.message)}
+            except Exception:
+                extracted = {"text": "", "needs_vision": True, "vision_error": "Model VLM lokal belum tersedia."}
+
         update = {
             "processing_status": "completed",
             "verification_status": "extracted",
@@ -183,7 +210,8 @@ class AttachmentOrchestrator:
         row = matches[0]
         data = await self.storage.get(row["bucket"], row["object_key"])
         validate_upload(data, payload.filename, payload.content_type, self.settings)
-        await self._process(row, data, "Analisis attachment ini")
+        await self._update_status(row["id"], user_id, "processing")
+        asyncio.create_task(self._process_safe(row, data, "Analisis attachment ini"))
         return await self.status(user_id, row["id"])
 
     async def upload(
@@ -211,7 +239,7 @@ class AttachmentOrchestrator:
             "created_at": self._now(),
         }
         await self._save_record(record)
-        await self._process(record, data, query)
+        asyncio.create_task(self._process_safe(record, data, query))
         preview = await self.storage.presigned_get(bucket, key, self.settings.presigned_url_expiry_seconds)
         info = AttachmentInfo(
             id=aid,
@@ -219,24 +247,29 @@ class AttachmentOrchestrator:
             stored_filename=key,
             mime_type=mime,
             preview_url=preview,
-            processing_status="completed",
+            processing_status="processing",
             detected_type=mime,
-            verification_status="extracted",
-            confidence=0.8,
+            verification_status="pending",
+            confidence=0.0,
         )
         return FileUploadResponse(
             file_id=aid,
             filename=filename,
-            extracted_text=record.get("extracted_text", ""),
+            extracted_text="",
             content_type=mime,
             url=preview,
             attachment=info,
-            context={"extracted_text": record.get("extracted_text", ""), "warnings": []},
+            context={"extracted_text": "", "warnings": ["File sedang diproses."]},
         )
 
     async def status(self, user_id: str, attachment_id: str) -> AttachmentStatusResponse:
         row = await self._row(user_id, attachment_id)
         state = row.get("processing_status", "failed")
+        meta = row.get("extraction_metadata", {}) or {}
+        error_msg = meta.get("error") or meta.get("vision_error")
+        error_data = None
+        if error_msg:
+            error_data = {"code": "PROCESSING_ERROR", "message": error_msg}
         return AttachmentStatusResponse(
             attachment_id=attachment_id,
             processing_status=state,
@@ -246,7 +279,18 @@ class AttachmentOrchestrator:
             extracted_text=row.get("extracted_text"),
             detected_type=row.get("mime_type"),
             retryable=state == "failed",
+            error=error_data,
         )
+
+    async def retry(self, user_id: str, attachment_id: str) -> AttachmentStatusResponse:
+        row = await self._row(user_id, attachment_id)
+        state = row.get("processing_status", "failed")
+        if state not in {"failed", "pending_processing"}:
+            return await self.status(user_id, attachment_id)
+        await self._update_status(attachment_id, user_id, "processing")
+        data = await self.storage.get(row["bucket"], row["object_key"])
+        asyncio.create_task(self._process_safe(row, data, "Analisis attachment ini"))
+        return await self.status(user_id, attachment_id)
 
     async def delete(self, user_id: str, attachment_id: str) -> None:
         row = await self._row(user_id, attachment_id)
