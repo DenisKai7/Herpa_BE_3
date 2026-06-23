@@ -8,6 +8,7 @@ QuizQuestionType = Literal[
     "true_false",
     "short_answer",
     "case_based",
+    "case_study",
 ]
 
 
@@ -46,6 +47,9 @@ class QuizQuestionResponse(BaseModel):
     prompt: str
     options: list[Any] = Field(default_factory=list)
     matching_pairs: list[Any] = Field(default_factory=list)
+    left_items: list[dict[str, Any]] = Field(default_factory=list)
+    right_items: list[dict[str, Any]] = Field(default_factory=list)
+    matching_prompt: str | None = None
     difficulty: str = "easy"
 
 
@@ -69,13 +73,20 @@ class QuizSessionResponse(BaseModel):
 class SubmitAnswerRequest(BaseModel):
     question_id: str
     selected_option_id: str | None = None
+    answer_text: str | None = None
+    matching_answer: dict[str, str] | None = None
     elapsed_ms: int = Field(default=0, ge=0)
     answer: Any | None = None
 
 
 class SubmitAnswerResponse(BaseModel):
     correct: bool
+    is_correct: bool | None = None
+    question_type: QuizQuestionType | None = None
+    answer_text: str | None = None
     correct_answer: Any | None = None
+    accepted_answers: list[Any] = Field(default_factory=list)
+    formatted_correct_answer: Any | None = None
     explanation: str | None = None
     score_delta: int = 0
     xp_delta: int = 0

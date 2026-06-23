@@ -356,8 +356,19 @@ class QuizService:
         answer: Any = None,
         selected_option_id: str | None = None,
         elapsed_ms: int = 0,
+        answer_text: str | None = None,
+        matching_answer: dict | None = None,
     ):
-        return await self.repository.submit_answer(user_id, session_id, question_id, answer, selected_option_id, elapsed_ms)
+        return await self.repository.submit_answer(
+            user_id,
+            session_id,
+            question_id,
+            answer,
+            selected_option_id,
+            elapsed_ms,
+            answer_text=answer_text,
+            matching_answer=matching_answer,
+        )
 
     async def session_summary(self, user_id: str, session_id: str):
         return await self.repository.get_summary(user_id, session_id)

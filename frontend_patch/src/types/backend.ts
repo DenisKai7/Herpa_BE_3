@@ -188,7 +188,17 @@ export interface QuizCompletion {
   analisis_performa: { sorotan: string[]; area_fokus: string[] };
 }
 
-export type QuizQuestionType = "multiple_choice" | "matching" | "true_false" | "short_answer" | "case_based";
+export type QuizQuestionType = "multiple_choice" | "matching" | "true_false" | "short_answer" | "case_based" | "case_study";
+
+export type QuizMatchingItem = {
+  key: string;
+  text: string;
+};
+
+export type QuizMatchingPairs = {
+  left_items: QuizMatchingItem[];
+  right_items: QuizMatchingItem[];
+};
 
 export type QuizOption = {
   id: string;
@@ -203,7 +213,10 @@ export type QuizQuestion = {
   question_type: QuizQuestionType;
   prompt: string;
   options: QuizOption[];
-  matching_pairs: unknown[];
+  matching_pairs: QuizMatchingPairs | unknown[];
+  left_items?: QuizMatchingItem[];
+  right_items?: QuizMatchingItem[];
+  matching_prompt?: string | null;
   difficulty: string;
 };
 
@@ -263,13 +276,20 @@ export type StartQuizSessionPayload = {
 export type SubmitQuizAnswerPayload = {
   question_id: string;
   selected_option_id?: string | null;
+  answer_text?: string | null;
+  matching_answer?: Record<string, string>;
   elapsed_ms?: number;
   answer?: unknown;
 };
 
 export type SubmitQuizAnswerResponse = {
   correct: boolean;
+  is_correct: boolean;
+  question_type?: QuizQuestionType;
+  answer_text?: string | null;
   correct_answer?: unknown;
+  accepted_answers?: unknown[];
+  formatted_correct_answer?: string | null;
   explanation?: string | null;
   score_delta: number;
   xp_delta: number;

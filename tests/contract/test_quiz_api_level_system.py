@@ -10,6 +10,15 @@ from app.main import app
 from app.models.auth import CurrentUser
 from app.services.supabase.client import SupabaseClient
 from app.services.supabase.profile_service import ProfileService
+from app.services.quiz.quiz_engine import (
+    calculate_topic_progress,
+    calculate_user_level,
+    extract_accepted_answers,
+    format_correct_answer,
+    is_answer_correct,
+    is_level_unlocked,
+    normalize_answer,
+)
 from app.services.supabase.quiz_service import QuizService
 
 
@@ -95,7 +104,7 @@ def test_quiz_topics_returns_200(quiz_client):
     assert response.status_code == 200
     data = response.json()
     topics = data["topics"]
-    assert len(topics) == 16
+    assert len(topics) == 17
     assert topics[0]["title"] == "Struktur Atom"
 
 
@@ -197,16 +206,44 @@ def test_submit_multiple_choice_answer_feedback(quiz_client):
     assert data["score_delta"] == 10
 
 
+def test_matching_question_returns_render_items(quiz_client):
+    client, _ = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 2}).json()
+    question = session["questions"][0]
+    assert "correct_answer" not in question
+    assert question["left_items"]
+    assert question["right_items"]
+    assert question["matching_pairs"]["left_items"] == question["left_items"]
+    assert question["matching_pairs"]["right_items"] == question["right_items"]
+
+
 def test_submit_matching_answer(quiz_client):
+    client, service = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 2}).json()
+    question = session["questions"][0]
+    db_question = service.repository._sessions[session["id"]]["questions"][0]
+    correct_ans = db_question["correct_answer"]
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={"question_id": question["id"], "matching_answer": correct_ans},
+    )
+    assert response.status_code == 200
+    assert response.json()["correct"] is True
+    saved = service.repository._answers[session["id"]][0]["answer"]
+    assert saved["question_type"] == "matching"
+    assert saved["matching_answer"] == {str(k): str(v) for k, v in correct_ans.items()}
+
+
+def test_submit_incomplete_matching_answer_returns_400(quiz_client):
     client, _ = quiz_client
     session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 2}).json()
     question = session["questions"][0]
     response = client.post(
         f"/api/quiz/sessions/{session['id']}/answer",
-        json={"question_id": question["id"], "answer": question["matching_pairs"]},
+        json={"question_id": question["id"], "matching_answer": {}},
     )
-    assert response.status_code == 200
-    assert response.json()["correct"] is True
+    assert response.status_code == 400
+    assert response.json()["detail"]["message"] == "Jawaban mencocokkan belum lengkap."
 
 
 def test_complete_session_updates_xp(quiz_client):
@@ -288,15 +325,114 @@ def test_optional_complete_endpoint_before_done(quiz_client):
     assert response.json()["completed"] is False
 
 
-def test_seed_invariants():
-    from app.services.quiz.quiz_seed import QUIZ_SEED_TOPICS
+def test_normalize_answer():
+    from app.services.quiz.quiz_engine import normalize_answer
+    assert normalize_answer("  Alkana  ") == "alkana"
+    assert normalize_answer("Alkana   Murni") == "alkana murni"
+    assert normalize_answer("alkana‐tertiary–secondary—normal−isomer") == "alkana-tertiary-secondary-normal-isomer"
+    assert normalize_answer(None) == ""
 
-    assert len(QUIZ_SEED_TOPICS) == 16
-    for topic in QUIZ_SEED_TOPICS:
-        assert len(topic["levels"]) == 5
-        for level in topic["levels"]:
-            questions = [q for q in topic["questions"] if q["level_id"] == level["id"]]
-            assert len(questions) >= 10
+
+def test_extract_accepted_answers():
+    from app.services.quiz.quiz_engine import extract_accepted_answers
+    # String
+    assert extract_accepted_answers("alkana") == ["alkana"]
+    # List
+    assert extract_accepted_answers(["alkana", "alkena", None]) == ["alkana", "alkena"]
+    # Dict shapes
+    assert extract_accepted_answers({"accepted_answers": ["alkana", "alkena"]}) == ["alkana", "alkena"]
+    assert extract_accepted_answers({"keywords": ["alkana", "alkena"]}) == ["alkana", "alkena"]
+    assert extract_accepted_answers({"answers": ["alkana", "alkena"]}) == ["alkana", "alkena"]
+    assert extract_accepted_answers({"answer": "alkana"}) == ["alkana"]
+    assert extract_accepted_answers({"value": "alkana"}) == ["alkana"]
+    assert extract_accepted_answers({"correct": "alkana"}) == ["alkana"]
+    assert extract_accepted_answers({"text": "alkana"}) == ["alkana"]
+    assert extract_accepted_answers({"label": "alkana"}) == ["alkana"]
+    # External accepted_answers
+    assert extract_accepted_answers("alkana", ["alkena"]) == ["alkana", "alkena"]
+
+
+def test_submit_short_answer_variations(quiz_client):
+    client, service = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 4}).json()
+    question = session["questions"][0]
+    db_question = service.repository._sessions[session["id"]]["questions"][0]
+    correct_ans = format_correct_answer(db_question["correct_answer"])
+
+    # Test lowercase
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={"question_id": question["id"], "answer_text": correct_ans.lower()},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["correct"] is True
+    assert data["is_correct"] is True
+    assert data["question_type"] == "short_answer"
+    assert data["answer_text"] == correct_ans.lower()
+    assert data["formatted_correct_answer"] == correct_ans
+
+    # Test uppercase/capitalized
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={"question_id": question["id"], "answer_text": correct_ans.upper()},
+    )
+    assert response.status_code == 200
+    assert response.json()["correct"] is True
+
+    # Test spacing variation
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={"question_id": question["id"], "answer_text": f"   {correct_ans}   "},
+    )
+    assert response.status_code == 200
+    assert response.json()["correct"] is True
+
+
+def test_submit_short_answer_incorrect(quiz_client):
+    client, _ = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 4}).json()
+    question = session["questions"][0]
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={"question_id": question["id"], "answer_text": "salah-total-bukan-ini"},
+    )
+    assert response.status_code == 200
+    assert response.json()["correct"] is False
+    assert response.json()["is_correct"] is False
+
+
+def test_submit_short_answer_empty_returns_400(quiz_client):
+    client, _ = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 4}).json()
+    question = session["questions"][0]
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={"question_id": question["id"], "answer_text": "   "},
+    )
+    assert response.status_code == 400
+    assert "Jawaban singkat tidak boleh kosong" in response.json()["detail"]["message"]
+
+
+def test_all_17_topics_level_4(quiz_client):
+    client, service = quiz_client
+    topics = client.get("/api/quiz/topics").json()["topics"]
+    assert len(topics) == 17
+    for topic in topics:
+        session = client.post("/api/quiz/sessions", json={"topic_id": topic["id"], "level_number": 4}).json()
+        assert len(session["questions"]) == 10
+        raw_questions = {q["id"]: q for q in service.repository._sessions[session["id"]]["questions"]}
+        for question in session["questions"]:
+            assert question["question_type"] == "short_answer"
+            raw_question = raw_questions[question["id"]]
+            correct_ans = format_correct_answer(raw_question["correct_answer"])
+            response = client.post(
+                f"/api/quiz/sessions/{session['id']}/answer",
+                json={"question_id": question["id"], "answer_text": correct_ans},
+            ).json()
+            assert response["correct"] is True
+            assert response["is_correct"] is True
+            assert response["formatted_correct_answer"] == correct_ans
 
 
 def test_admin_login_role_admin(quiz_client):
@@ -409,7 +545,7 @@ def test_dashboard_returns_progress_topics_and_active_sessions(quiz_client):
     assert response.status_code == 200
     data = response.json()
     assert "progress" in data
-    assert len(data["topics"]) == 16
+    assert len(data["topics"]) == 17
     assert any(item["session_id"] == session["id"] and item["status"] == "active" for item in data["active_sessions"])
 
 

@@ -21,6 +21,17 @@ alter table public.quiz_answers add column if not exists correct_answer jsonb;
 alter table public.quiz_answers add column if not exists score_delta integer not null default 0;
 alter table public.quiz_answers add column if not exists xp_delta integer not null default 0;
 alter table public.quiz_answers add column if not exists explanation_snapshot text;
+alter table public.quiz_answers add column if not exists question_type text;
+alter table public.quiz_answers add column if not exists answer_text text;
+alter table public.quiz_answers add column if not exists matching_answer jsonb;
+alter table public.quiz_answers add column if not exists raw_answer jsonb;
+alter table public.quiz_answers add column if not exists accepted_answers jsonb not null default '[]'::jsonb;
+alter table public.quiz_answers add column if not exists formatted_correct_answer jsonb;
+alter table public.quiz_answers add column if not exists elapsed_ms integer default 0;
+alter table public.quiz_answers add column if not exists answered_at timestamptz default now();
+
+create unique index if not exists uq_quiz_answers_attempt_question
+  on public.quiz_answers (attempt_id, question_id);
 
 create index if not exists idx_quiz_modules_slug on public.quiz_modules(slug);
 create index if not exists idx_quiz_levels_module_number on public.quiz_levels(module_id, level_number);

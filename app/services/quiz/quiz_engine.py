@@ -35,8 +35,18 @@ def normalize_matching_answer(value: Any) -> list[tuple[str, str]]:
     return []
 
 
+def normalize_answer(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).lower().strip()
+    text = " ".join(text.split())
+    for dash in ("‐", "–", "—", "−"):
+        text = text.replace(dash, "-")
+    return text
+
+
 def normalize_text(value: Any) -> str:
-    return " ".join(str(value).strip().lower().split())
+    return normalize_answer(value)
 
 
 def _answer_payload(correct_answer: Any) -> Any:
@@ -45,12 +55,53 @@ def _answer_payload(correct_answer: Any) -> Any:
     return correct_answer
 
 
+def extract_accepted_answers(correct_answer: Any, accepted_answers: list[Any] | None = None) -> list[str]:
+    values: list[Any] = []
+    if correct_answer is None:
+        values = []
+    elif isinstance(correct_answer, str):
+        values = [correct_answer]
+    elif isinstance(correct_answer, list):
+        values = [item for item in correct_answer if item is not None]
+    elif isinstance(correct_answer, dict):
+        for key in ("accepted_answers", "keywords", "answers"):
+            item = correct_answer.get(key)
+            if isinstance(item, list):
+                values.extend(x for x in item if x is not None)
+                break
+        else:
+            for key in ("answer", "value", "correct", "text", "label"):
+                item = correct_answer.get(key)
+                if isinstance(item, str):
+                    values.append(item)
+                    break
+            else:
+                values.append(correct_answer)
+    else:
+        values = [correct_answer]
+    values.extend(accepted_answers or [])
+
+    result = []
+    seen = set()
+    for value in values:
+        text = str(value)
+        if not normalize_answer(text):
+            continue
+        key = normalize_answer(text)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(text)
+    return result
+
+
+def format_correct_answer(correct_answer: Any, accepted_answers: list[Any] | None = None) -> str:
+    accepted = extract_accepted_answers(correct_answer, accepted_answers)
+    return accepted[0] if accepted else ""
+
+
 def _accepted_answers(correct_answer: Any, accepted_answers: list[Any] | None = None) -> list[Any]:
-    answers = []
-    if isinstance(correct_answer, dict):
-        answers.extend(correct_answer.get("accepted_answers") or [])
-    answers.extend(accepted_answers or [])
-    return answers
+    return extract_accepted_answers(correct_answer, accepted_answers)
 
 
 def is_answer_correct(
@@ -66,10 +117,23 @@ def is_answer_correct(
             user_answer = normalize_text(user_answer) in {"true", "benar", "1", "yes", "ya"}
         return bool(user_answer) == bool(expected)
     if question_type == "short_answer":
-        answers = [expected, *_accepted_answers(correct_answer, accepted_answers)]
-        return normalize_text(user_answer) in {normalize_text(answer) for answer in answers}
+        user_normalized = normalize_answer(user_answer)
+        if not user_normalized:
+            return False
+        normalized_answers = [normalize_answer(answer) for answer in extract_accepted_answers(correct_answer, accepted_answers)]
+        return user_normalized in normalized_answers or any(
+            answer and len(answer) >= 3 and answer in user_normalized for answer in normalized_answers
+        )
     if question_type == "matching":
         return normalize_matching_answer(user_answer) == normalize_matching_answer(expected)
     if question_type == "case_based":
+        if isinstance(correct_answer, dict) and "keywords" in correct_answer:
+            keywords = correct_answer["keywords"]
+            min_keywords = correct_answer.get("min_keywords", 1)
+            if not user_answer:
+                return False
+            user_normalized = normalize_text(user_answer)
+            match_count = sum(1 for kw in keywords if normalize_text(kw) in user_normalized)
+            return match_count >= min_keywords
         return normalize_text(user_answer) == normalize_text(expected)
     return False

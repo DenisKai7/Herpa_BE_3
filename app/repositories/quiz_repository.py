@@ -10,14 +10,35 @@ from app.core.exceptions import AppError, BadRequestError, ConflictError, NotFou
 from app.services.quiz.quiz_engine import (
     calculate_topic_progress,
     calculate_user_level,
+    extract_accepted_answers,
+    format_correct_answer,
     is_answer_correct,
     is_level_unlocked,
+    normalize_answer,
 )
 from app.services.quiz.quiz_seed import QUIZ_SEED_TOPICS
 from app.services.supabase.client import SupabaseClient
 
 
 logger = logging.getLogger(__name__)
+
+
+TYPE_LABEL_MAP = {
+    "multiple_choice": "Pilihan Ganda",
+    "matching": "Mencocokkan",
+    "true_false": "Benar/Salah",
+    "short_answer": "Jawaban Singkat",
+    "case_based": "Studi Kasus",
+    "case_study": "Studi Kasus",
+}
+
+
+def _matching_item(item: Any, key_field: str = "key") -> dict[str, str]:
+    if isinstance(item, dict):
+        key = item.get(key_field) or item.get("id") or item.get("value") or item.get("label") or item.get("text")
+        text = item.get("text") or item.get("label") or item.get("value") or key
+        return {"key": str(key), "text": str(text)}
+    return {"key": str(item), "text": str(item)}
 
 
 class QuizRepository:
@@ -54,14 +75,65 @@ class QuizRepository:
             return value["answer"]
         return value
 
-    @staticmethod
-    def _public_question(question: dict[str, Any], include_review: bool = False) -> dict[str, Any]:
+    @classmethod
+    def _matching_items(cls, question: dict[str, Any]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+        metadata = cls._safe_json_value(question.get("metadata") or {}) or {}
+        left_items = cls._safe_json_value(metadata.get("left_items") or []) or []
+        right_items = cls._safe_json_value(metadata.get("right_items") or []) or []
+        if left_items and right_items:
+            return [_matching_item(item, "key") for item in left_items], [_matching_item(item, "key") for item in right_items]
+
+        matching = cls._safe_json_value(metadata.get("matching") or {}) or {}
+        if isinstance(matching, dict):
+            left_items = matching.get("left_items") or matching.get("left") or []
+            right_items = matching.get("right_items") or matching.get("right") or []
+            if left_items and right_items:
+                return [_matching_item(item, "key") for item in left_items], [_matching_item(item, "key") for item in right_items]
+
+        pairs = cls._safe_json_value(question.get("matching_pairs") or []) or []
+        if pairs:
+            left_items = []
+            right_items = []
+            for index, pair in enumerate(pairs, start=1):
+                if isinstance(pair, dict):
+                    left = pair.get("left_text") or pair.get("left") or pair.get("source")
+                    right = pair.get("right_text") or pair.get("right") or pair.get("target")
+                    left_key = pair.get("left_key") or pair.get("left_id") or (chr(64 + index) if index <= 26 else str(index))
+                    right_key = pair.get("right_key") or pair.get("right_id") or str(index)
+                elif isinstance(pair, (list, tuple)) and len(pair) >= 2:
+                    left, right = pair[0], pair[1]
+                    left_key = chr(64 + index) if index <= 26 else str(index)
+                    right_key = str(index)
+                else:
+                    continue
+                left_items.append({"key": str(left_key), "text": str(left)})
+                right_items.append({"key": str(right_key), "text": str(right)})
+            if left_items and right_items:
+                return left_items, right_items
+
+        correct = cls._display_answer(question.get("correct_answer"))
+        if isinstance(correct, dict):
+            left_items = [{"key": str(key), "text": str(key)} for key in correct]
+            right_items = [{"key": str(value), "text": str(value)} for value in dict.fromkeys(correct.values())]
+            return left_items, right_items
+        return [], []
+
+    @classmethod
+    def _public_question(cls, question: dict[str, Any], include_review: bool = False) -> dict[str, Any]:
         hidden = {"correct_answer", "accepted_answers"}
         public = {k: v for k, v in question.items() if k not in hidden}
         public["options"] = [
             ({k: v for k, v in option.items() if k != "is_correct"} if not include_review else option)
             for option in question.get("options", [])
         ]
+        if question.get("question_type") == "matching" and not include_review:
+            metadata = cls._safe_json_value(question.get("metadata") or {}) or {}
+            left_items, right_items = cls._matching_items(question)
+            public["prompt"] = metadata.get("matching_prompt") or question.get("matching_prompt") or public.get("prompt")
+            public["matching_prompt"] = public["prompt"]
+            public["left_items"] = left_items
+            public["right_items"] = right_items
+            public["matching_pairs"] = {"left_items": left_items, "right_items": right_items}
         return public
 
     def _fallback_stats(self, user_id: str) -> dict[str, Any]:
@@ -233,14 +305,16 @@ class QuizRepository:
         topics = []
         for topic in await self._topic_source():
             row = by_topic.get(topic["id"], {})
-            # Calculate highest_level_completed based on per-level best_score >= PASSING_SCORE
-            highest = 0
-            for level in topic["levels"]:
-                lp = per_level_progress.get(str(level["id"]), {})
-                level_best = int(lp.get("best_accuracy", 0) or 0)
-                level_completed = bool(lp.get("completed", False))
-                if level_completed and level_best >= PASSING_SCORE:
-                    highest = max(highest, int(level["level_number"]))
+            highest = int(row.get("highest_level_completed", 0) or 0)
+            if per_level_progress:
+                highest_db = 0
+                for level in topic["levels"]:
+                    lp = per_level_progress.get(str(level["id"]), {})
+                    level_best = int(lp.get("best_accuracy", 0) or 0)
+                    level_completed = bool(lp.get("completed", False))
+                    if level_completed and level_best >= PASSING_SCORE:
+                        highest_db = max(highest_db, int(level["level_number"]))
+                highest = max(highest, highest_db)
             levels = []
             for level in topic["levels"]:
                 number = int(level["level_number"])
@@ -249,10 +323,12 @@ class QuizRepository:
                 level_completed = bool(lp.get("completed", False)) and level_best >= PASSING_SCORE
                 question_count = len(await self.get_questions_for_level(str(level["id"]), topic["id"]))
                 is_unlocked = is_level_unlocked(number, highest)
+                qtype = level.get("quiz_type") or _quiz_type_for_level(number)
                 levels.append(
                     {
                         **level,
-                        "question_type": level.get("quiz_type") or _quiz_type_for_level(number),
+                        "question_type": qtype,
+                        "type_label": TYPE_LABEL_MAP.get(qtype, "Quiz"),
                         "question_count": question_count,
                         "is_unlocked": is_unlocked,
                         "is_locked": not is_unlocked,
@@ -319,9 +395,11 @@ class QuizRepository:
             "correct_answer": cls._safe_json_value(row.get("correct_answer")),
             "accepted_answers": cls._safe_json_value(row.get("accepted_answers") or metadata.get("accepted_answers") or []),
             "matching_pairs": cls._safe_json_value(row.get("matching_pairs") or metadata.get("matching_pairs") or []),
+            "metadata": cls._safe_json_value(metadata),
             "difficulty": str(row.get("difficulty", "easy")),
             "order_index": int(row.get("order_index", metadata.get("order_index", 0)) or 0),
             "xp_reward": int(row.get("xp_reward", 10) or 10),
+            "case_context": metadata.get("case_context"),
         }
 
     async def get_questions_for_level(self, level_id: str, topic_id: str | None = None) -> list[dict[str, Any]]:
@@ -505,30 +583,20 @@ class QuizRepository:
         session_id: str,
         question_id: str,
         user_answer: Any,
-        correct_answer: Any,
-        explanation: str | None,
         is_correct: bool,
-        score_delta: int,
         duration_ms: int = 0,
+        correct_answer: Any = None,
+        explanation: str | None = None,
     ) -> dict[str, Any]:
         await self.get_session(user_id, session_id)
         row = {
             "id": str(uuid4()),
             "attempt_id": session_id,
-            "session_id": session_id,
-            "user_id": user_id,
             "question_id": question_id,
             "answer": user_answer,
-            "user_answer": user_answer,
-            "correct_answer": correct_answer,
-            "is_correct": is_correct,
+            "is_correct": bool(is_correct),
             "is_skipped": False,
             "duration_ms": duration_ms,
-            "score_delta": score_delta,
-            "xp_delta": 10 if is_correct else 0,
-            "explanation_snapshot": explanation,
-            "created_at": self._now(),
-            "answered_at": self._now(),
         }
         try:
             await self.client.request(
@@ -536,14 +604,36 @@ class QuizRepository:
                 "quiz_answers",
                 params={"on_conflict": "attempt_id,question_id"},
                 json=row,
-                prefer="resolution=merge-duplicates,return=minimal",
+                prefer="resolution=merge-duplicates,return=representation",
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            status_code = getattr(exc, "status_code", None)
+            response_text = getattr(exc, "details", {}).get("response") if hasattr(exc, "details") else None
+            if not response_text:
+                response_text = getattr(exc, "message", None) or str(exc)
+            logger.exception(
+                "Failed to save quiz answer",
+                extra={
+                    "attempt_id": session_id,
+                    "question_id": question_id,
+                    "question_type": user_answer.get("question_type") if isinstance(user_answer, dict) else None,
+                    "status_code": status_code,
+                    "response_text": response_text,
+                    "payload_keys": list(row.keys()),
+                },
+            )
+            raise AppError("QUIZ_ANSWER_SAVE_FAILED", "Jawaban belum tersimpan. Coba lagi.", 500) from exc
+
+        cached_row = row | {
+            "user_answer": user_answer,
+            "correct_answer": correct_answer,
+            "explanation_snapshot": explanation,
+            "question_type": user_answer.get("question_type") if isinstance(user_answer, dict) else None,
+        }
         answers = self._answers.setdefault(session_id, [])
         answers[:] = [item for item in answers if item["question_id"] != question_id]
-        answers.append(row)
-        return row
+        answers.append(cached_row)
+        return cached_row
 
     async def _answers_for_session(self, session_id: str) -> list[dict[str, Any]]:
         if session_id in self._answers:
@@ -568,11 +658,29 @@ class QuizRepository:
         topic, level = await self._level_context(str(session["level_id"]))
         level_number = int(level["level_number"])
         passed = score >= int(level.get("passing_score", 70) or 70) if completed else None
+
+        already_completed = False
+        if completed:
+            try:
+                progress_rows = await self.client.select(
+                    "quiz_progress",
+                    {"select": "completed", "user_id": f"eq.{user_id}", "level_id": f"eq.{session['level_id']}", "limit": "1"}
+                )
+                if progress_rows and progress_rows[0].get("completed"):
+                    already_completed = True
+            except Exception:
+                key = (user_id, topic["id"])
+                if key in self._progress and self._progress[key].get("highest_level_completed", 0) >= level_number:
+                    already_completed = True
+
         xp_earned = correct * 10
         if completed and passed:
             xp_earned += 20
         if completed and passed and level_number == 5:
             xp_earned += 50
+        if already_completed:
+            xp_earned = 0
+
         patch = {
             "score": score,
             "correct": correct,
@@ -609,77 +717,199 @@ class QuizRepository:
         user_answer: Any = None,
         selected_option_id: str | None = None,
         elapsed_ms: int = 0,
+        answer_text: str | None = None,
+        matching_answer: dict | None = None,
     ) -> dict[str, Any]:
         session = await self.get_session(user_id, session_id)
         if session.get("status") == "completed":
             logger.info("Quiz answer rejected: attempt completed", extra={"attempt_id": session_id, "user_id": user_id})
             raise BadRequestError("Quiz attempt already completed")
         questions = session.get("questions") or []
-        allowed_ids = {str(q["id"]) for q in questions}
-        if str(question_id) not in allowed_ids:
-            logger.info("Quiz answer rejected: question not in attempt", extra={"attempt_id": session_id, "user_id": user_id, "question_id": question_id})
+        question = next((q for q in questions if str(q["id"]) == str(question_id)), None)
+        if not question:
+            exists = False
+            db_question = None
+            if self.client.settings.allow_mock_services:
+                from app.services.quiz.quiz_seed import QUIZ_SEED_TOPICS, questions_for_level
+                for t in QUIZ_SEED_TOPICS:
+                    for lvl in t.get("levels", []):
+                        for q in questions_for_level(str(lvl["id"])):
+                            if str(q["id"]) == str(question_id):
+                                exists = True
+                                db_question = q
+                                break
+                        if exists:
+                            break
+                    if exists:
+                        break
+            else:
+                try:
+                    rows = await self.client.select("quiz_questions", {"select": "*", "id": f"eq.{question_id}", "limit": "1"})
+                    if rows:
+                        exists = True
+                        db_question = rows[0]
+                except Exception:
+                    pass
+            if not exists:
+                raise NotFoundError("Quiz question not found")
             raise ConflictError(
                 message="Question does not belong to this quiz attempt",
                 code="QUESTION_NOT_IN_ATTEMPT",
                 details={
                     "attempt_level_id": str(session.get("level_id", "")),
-                    "question_level_id": question_id,
+                    "question_level_id": str(db_question.get("level_id", "")),
                     "message": "Question does not belong to this quiz attempt",
                 },
             )
-        question = next(q for q in questions if str(q["id"]) == str(question_id))
-        question_type = question.get("question_type", "multiple_choice")
+        orig_question_type = question.get("question_type", "multiple_choice")
+        question_type = orig_question_type
+        if question_type == "case_study":
+            question_type = "case_based"
+
+        # Dispatch user answer and format depending on question type
+        resolved_user_answer = user_answer
+        if question_type in {"multiple_choice", "true_false"}:
+            if selected_option_id is not None:
+                resolved_user_answer = selected_option_id
+            elif user_answer is not None:
+                resolved_user_answer = user_answer
+        elif question_type == "matching":
+            resolved_user_answer = matching_answer if matching_answer is not None else user_answer
+        elif question_type in {"short_answer", "case_based"}:
+            if answer_text is not None:
+                resolved_user_answer = answer_text
+            elif user_answer is not None:
+                resolved_user_answer = user_answer
+            elif selected_option_id is not None:
+                resolved_user_answer = selected_option_id
+
         option = None
         correct_option = None
         correct_answer = self._display_answer(question.get("correct_answer"))
-        if not selected_option_id and user_answer is not None and question_type in {"multiple_choice", "case_based"}:
-            selected_option_id = str(user_answer)
-        if selected_option_id:
-            option = next(
-                (
-                    opt
-                    for opt in question.get("options", [])
-                    if str(opt.get("id")) == str(selected_option_id)
-                    or str(opt.get("option_key")) == str(selected_option_id)
-                ),
-                None,
-            )
-            if not option:
-                logger.info(
-                    "Quiz answer rejected: selected option not found",
-                    extra={"attempt_id": session_id, "user_id": user_id, "question_id": question_id, "selected_option_id": selected_option_id},
-                )
-                raise NotFoundError("Quiz selected option not found")
-        elif question_type in {"multiple_choice", "case_based"}:
-            raise NotFoundError("Quiz selected option not found")
-        correct_option = next((opt for opt in question.get("options", []) if opt.get("is_correct")), None)
-        if not correct_option:
-            correct_option = next(
-                (
-                    opt
-                    for opt in question.get("options", [])
-                    if str(opt.get("id")) == str(correct_answer)
-                    or str(opt.get("option_key")) == str(correct_answer)
-                    or str(opt.get("text")) == str(correct_answer)
-                    or str(opt.get("label")) == str(correct_answer)
-                ),
-                None,
-            )
-        if option:
-            if not correct_option:
-                logger.error("Quiz question has no correct option", extra={"question_id": question_id})
-                raise AppError("QUIZ_CORRECT_OPTION_NOT_FOUND", "Soal belum memiliki jawaban benar.", 500)
-            correct = str(option["id"]) == str(correct_option["id"])
-            if correct_answer in (None, ""):
-                correct_answer = correct_option.get("text") or correct_option.get("label")
+        accepted_answers: list[Any] = []
+        formatted_correct_answer: Any | None = None
+        response_answer_text: str | None = None
+
+        if question_type == "short_answer":
+            response_answer_text = str(resolved_user_answer or "").strip()
+            if not response_answer_text:
+                raise BadRequestError("Jawaban singkat tidak boleh kosong.")
+            accepted_answers = extract_accepted_answers(question.get("correct_answer"), question.get("accepted_answers"))
+            formatted_correct_answer = format_correct_answer(question.get("correct_answer"), question.get("accepted_answers"))
+            user_answer_normalized = normalize_answer(response_answer_text)
+            normalized_accepted = [normalize_answer(answer) for answer in accepted_answers]
+            is_exact_match = user_answer_normalized in normalized_accepted
+            is_keyword_match = any(answer and len(answer) >= 3 and answer in user_answer_normalized for answer in normalized_accepted)
+            correct = bool(is_exact_match or is_keyword_match)
+            correct_answer = formatted_correct_answer
             normalized_answer = {
-                "selected_option_id": str(option["id"]),
-                "selected_option_key": option.get("option_key"),
-                "text": option.get("text"),
+                "question_type": "short_answer",
+                "answer_text": response_answer_text,
+            }
+            logger.info(
+                "short_answer_scoring",
+                extra={
+                    "event": "short_answer_scoring",
+                    "attempt_id": session_id,
+                    "question_id": question_id,
+                    "topic_title": session.get("topic_title") or session.get("topic_id"),
+                    "level_number": session.get("level_number"),
+                    "question_type": question_type,
+                    "user_answer_raw": response_answer_text,
+                    "user_answer_normalized": user_answer_normalized,
+                    "accepted_answers": accepted_answers,
+                    "normalized_accepted": normalized_accepted,
+                    "is_exact_match": is_exact_match,
+                    "is_keyword_match": is_keyword_match,
+                    "is_correct": correct,
+                },
+            )
+        elif question_type == "matching":
+            if not isinstance(resolved_user_answer, dict) or not resolved_user_answer:
+                raise BadRequestError("Jawaban mencocokkan belum lengkap.")
+            expected = self._display_answer(question.get("correct_answer"))
+            expected_keys = {str(key) for key in expected} if isinstance(expected, dict) else set()
+            if not expected_keys:
+                left_items, _ = self._matching_items(question)
+                expected_keys = {str(item["key"]) for item in left_items}
+            submitted_keys = {str(key) for key, value in resolved_user_answer.items() if value not in (None, "")}
+            if expected_keys and submitted_keys != expected_keys:
+                raise BadRequestError("Jawaban mencocokkan belum lengkap.")
+            correct = is_answer_correct("matching", expected, resolved_user_answer, question.get("accepted_answers"))
+            normalized_answer = {
+                "question_type": "matching",
+                "matching_answer": {str(key): str(value) for key, value in resolved_user_answer.items()},
             }
         else:
-            correct = is_answer_correct(question_type, question["correct_answer"], user_answer, question.get("accepted_answers"))
-            normalized_answer = user_answer
+            # Check if we should find matching option record (only MC, TF, or if case_based uses options)
+            opt_id = selected_option_id
+            if not opt_id and question_type in {"multiple_choice", "true_false", "case_based"} and isinstance(resolved_user_answer, str):
+                opt_exists = any(
+                    str(opt.get("id")) == str(resolved_user_answer) or str(opt.get("option_key")) == str(resolved_user_answer)
+                    for opt in question.get("options", [])
+                )
+                if opt_exists:
+                    opt_id = resolved_user_answer
+
+            if opt_id:
+                option = next(
+                    (
+                        opt
+                        for opt in question.get("options", [])
+                        if str(opt.get("id")) == str(opt_id)
+                        or str(opt.get("option_key")) == str(opt_id)
+                    ),
+                    None,
+                )
+                if not option and question_type in {"multiple_choice", "case_based"}:
+                    logger.info(
+                        "Quiz answer rejected: selected option not found",
+                        extra={"attempt_id": session_id, "user_id": user_id, "question_id": question_id, "selected_option_id": opt_id},
+                    )
+                    raise NotFoundError("Quiz selected option not found")
+
+            if option:
+                correct_option = next((opt for opt in question.get("options", []) if opt.get("is_correct")), None)
+                if not correct_option:
+                    correct_option = next(
+                        (
+                            opt
+                            for opt in question.get("options", [])
+                            if str(opt.get("id")) == str(correct_answer)
+                            or str(opt.get("option_key")) == str(correct_answer)
+                            or str(opt.get("text")) == str(correct_answer)
+                            or str(opt.get("label")) == str(correct_answer)
+                        ),
+                        None,
+                    )
+                if correct_option:
+                    correct = str(option["id"]) == str(correct_option["id"])
+                else:
+                    correct = is_answer_correct(question_type, question["correct_answer"], option.get("option_key") or option.get("id"), question.get("accepted_answers"))
+
+                if correct_answer in (None, "") and correct_option:
+                    correct_answer = correct_option.get("text") or correct_option.get("label")
+                stored_qtype = "case_study" if orig_question_type == "case_study" else question_type
+                normalized_answer = {
+                    "question_type": stored_qtype,
+                    "selected_option_id": str(option["id"]),
+                    "selected_option_key": option.get("option_key"),
+                }
+            else:
+                correct = is_answer_correct(question_type, question["correct_answer"], resolved_user_answer, question.get("accepted_answers"))
+                stored_qtype = "case_study" if orig_question_type == "case_study" else question_type
+                if stored_qtype in {"case_study", "case_based"}:
+                    normalized_answer = {
+                        "question_type": stored_qtype,
+                        "answer_text": str(resolved_user_answer or "").strip(),
+                    }
+                else:
+                    normalized_answer = {
+                        "question_type": stored_qtype,
+                        "selected_option_id": str(resolved_user_answer) if resolved_user_answer is not None else None,
+                        "selected_option_key": None,
+                    }
+
         logger.info(
             "Submitting quiz answer",
             extra={"attempt_id": session_id, "user_id": user_id, "question_id": question_id, "selected_option_id": selected_option_id},
@@ -689,11 +919,10 @@ class QuizRepository:
             session_id,
             question_id,
             normalized_answer,
-            correct_answer,
-            question.get("explanation"),
             correct,
-            10 if correct else 0,
             elapsed_ms,
+            correct_answer=correct_answer,
+            explanation=question.get("explanation"),
         )
         completion = await self.complete_session_if_done(user_id, session_id)
         return {
@@ -702,11 +931,15 @@ class QuizRepository:
             "question_id": question_id,
             "selected_option_id": str(option["id"]) if option else None,
             "selected_option_key": option.get("option_key") if option else None,
-            "is_correct": correct,
-            "correct": correct,
+            "is_correct": bool(correct),
+            "correct": bool(correct),
             "correct_option_id": str(correct_option["id"]) if correct_option else None,
             "correct_option_key": correct_option.get("option_key") if correct_option else None,
             "correct_answer": correct_answer,
+            "accepted_answers": accepted_answers,
+            "formatted_correct_answer": formatted_correct_answer or correct_answer,
+            "question_type": question_type,
+            "answer_text": response_answer_text,
             "explanation": question.get("explanation"),
             "current_question_index": completion.get("current_question_index"),
             "next_question_index": completion.get("current_question_index"),

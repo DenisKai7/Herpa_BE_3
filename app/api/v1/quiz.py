@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Query, Response, status
+import logging
+
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from app.api.dependencies.auth import get_current_user
 from app.api.dependencies.services import Services, get_services
@@ -7,6 +9,7 @@ from app.models.quiz import QuizAnswerRequest, QuizAttemptCreate
 from app.schemas.quiz import StartQuizSessionRequest, SubmitAnswerRequest
 
 router = APIRouter(tags=["Quiz"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/api/v1/quiz/subjects")
@@ -206,9 +209,19 @@ async def quiz_topic_level_detail(
 async def submit_quiz_answer(
     attempt_id: str,
     payload: SubmitAnswerRequest,
+    request: Request,
     user: CurrentUser = Depends(get_current_user),
     services: Services = Depends(get_services),
 ):
+    logger.info(
+        "Quiz answer auth accepted",
+        extra={
+            "auth_header_present": bool(request.headers.get("authorization")),
+            "user_id": user.id,
+            "attempt_id": attempt_id,
+            "question_id": payload.question_id,
+        },
+    )
     return await services.quiz_service.submit_session_answer(
         user.id,
         attempt_id,
@@ -216,6 +229,8 @@ async def submit_quiz_answer(
         payload.answer,
         payload.selected_option_id,
         payload.elapsed_ms,
+        answer_text=payload.answer_text,
+        matching_answer=payload.matching_answer,
     )
 
 

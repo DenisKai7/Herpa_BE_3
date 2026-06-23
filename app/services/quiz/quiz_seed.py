@@ -27,6 +27,7 @@ TOPIC_TITLES = [
     "Fitokimia Herbal",
     "Toksikologi Dasar",
     "Analisis Senyawa Obat",
+    "Kimia Lingkungan",
 ]
 
 DETAILED_BANKS: dict[str, dict[int, list[dict[str, Any]]]] = {

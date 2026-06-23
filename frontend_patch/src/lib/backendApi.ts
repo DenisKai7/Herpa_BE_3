@@ -25,10 +25,16 @@ backendApi.interceptors.request.use((config) => {
   return config;
 });
 
+export function isUnauthorizedError(error: unknown) {
+  return axios.isAxiosError(error) && error.response?.status === 401;
+}
+
+export const LOGIN_EXPIRED_MESSAGE = "Sesi login berakhir. Silakan login ulang.";
+
 backendApi.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && typeof window !== "undefined") {
+    if (isUnauthorizedError(error) && typeof window !== "undefined") {
       window.localStorage.removeItem("access_token");
     }
     return Promise.reject(error);
