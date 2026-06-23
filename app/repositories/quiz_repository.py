@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
+import json
+import logging
 from typing import Any
 from uuid import uuid4
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import AppError, BadRequestError, ConflictError, NotFoundError
 from app.services.quiz.quiz_engine import (
     calculate_topic_progress,
     calculate_user_level,
     is_answer_correct,
     is_level_unlocked,
 )
-from app.services.quiz.quiz_seed import QUIZ_SEED_TOPICS, find_level, questions_for_level
+from app.services.quiz.quiz_seed import QUIZ_SEED_TOPICS
 from app.services.supabase.client import SupabaseClient
+
+
+logger = logging.getLogger(__name__)
 
 
 class QuizRepository:
@@ -32,6 +37,32 @@ class QuizRepository:
     @staticmethod
     def _today() -> str:
         return date.today().isoformat()
+
+    @staticmethod
+    def _safe_json_value(value: Any) -> Any:
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (TypeError, json.JSONDecodeError):
+                return value
+        return value
+
+    @classmethod
+    def _display_answer(cls, value: Any) -> Any:
+        value = cls._safe_json_value(value)
+        if isinstance(value, dict) and "answer" in value:
+            return value["answer"]
+        return value
+
+    @staticmethod
+    def _public_question(question: dict[str, Any], include_review: bool = False) -> dict[str, Any]:
+        hidden = {"correct_answer", "accepted_answers"}
+        public = {k: v for k, v in question.items() if k not in hidden}
+        public["options"] = [
+            ({k: v for k, v in option.items() if k != "is_correct"} if not include_review else option)
+            for option in question.get("options", [])
+        ]
+        return public
 
     def _fallback_stats(self, user_id: str) -> dict[str, Any]:
         return self._stats.setdefault(
@@ -84,11 +115,12 @@ class QuizRepository:
                 "quiz_modules",
                 {"select": "*,quiz_levels(*)", "is_active": "eq.true", "order": "sort_order.asc"},
             )
-            if rows:
-                return [self._normalize_module(row) for row in rows]
-        except Exception:
-            pass
-        return QUIZ_SEED_TOPICS
+        except Exception as exc:
+            logger.exception("Failed to fetch quiz modules from database")
+            raise AppError("QUIZ_TOPICS_UNAVAILABLE", "Data topik quiz tidak dapat dibaca dari database.", 500) from exc
+        if not rows:
+            raise NotFoundError("Quiz topics not found.")
+        return [self._normalize_module(row) for row in rows]
 
     async def _find_topic(self, topic_id: str) -> dict[str, Any] | None:
         return next((topic for topic in await self._topic_source() if topic["id"] == topic_id), None)
@@ -101,15 +133,19 @@ class QuizRepository:
                     return level
                 if level_number and int(level["level_number"]) == int(level_number):
                     return level
-        fallback = find_level(topic_id, level_id=level_id, level_number=level_number)
-        return fallback
+        return None
 
-    async def _level_context(self, level_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    async def find_level_by_id(self, level_id: str | None) -> dict[str, Any] | None:
+        if not level_id:
+            return None
         for topic in await self._topic_source():
             for level in topic["levels"]:
                 if str(level["id"]) == str(level_id):
-                    return topic, level
-        for topic in QUIZ_SEED_TOPICS:
+                    return level | {"topic_id": topic["id"], "topic_title": topic["title"]}
+        return None
+
+    async def _level_context(self, level_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        for topic in await self._topic_source():
             for level in topic["levels"]:
                 if str(level["id"]) == str(level_id):
                     return topic, level
@@ -185,22 +221,58 @@ class QuizRepository:
     async def get_topics_with_progress(self, user_id: str) -> dict[str, list[dict[str, Any]]]:
         progress = await self.get_progress(user_id)
         by_topic = {row.get("topic_id"): row for row in progress.get("topic_progress", [])}
+        # Also fetch per-level progress from DB for accurate best_score per level
+        per_level_progress: dict[str, dict[str, Any]] = {}
+        try:
+            progress_rows = await self.client.select("quiz_progress", {"select": "*", "user_id": f"eq.{user_id}"})
+            for row in progress_rows:
+                per_level_progress[str(row.get("level_id"))] = row
+        except Exception:
+            pass
+        PASSING_SCORE = 70
         topics = []
         for topic in await self._topic_source():
             row = by_topic.get(topic["id"], {})
-            highest = int(row.get("highest_level_completed", 0) or 0)
+            # Calculate highest_level_completed based on per-level best_score >= PASSING_SCORE
+            highest = 0
+            for level in topic["levels"]:
+                lp = per_level_progress.get(str(level["id"]), {})
+                level_best = int(lp.get("best_accuracy", 0) or 0)
+                level_completed = bool(lp.get("completed", False))
+                if level_completed and level_best >= PASSING_SCORE:
+                    highest = max(highest, int(level["level_number"]))
             levels = []
             for level in topic["levels"]:
                 number = int(level["level_number"])
-                completed = highest >= number
-                levels.append({**level, "is_locked": not is_level_unlocked(number, highest), "is_completed": completed, "progress": 100 if completed else 0})
+                lp = per_level_progress.get(str(level["id"]), {})
+                level_best = int(lp.get("best_accuracy", 0) or 0)
+                level_completed = bool(lp.get("completed", False)) and level_best >= PASSING_SCORE
+                question_count = len(await self.get_questions_for_level(str(level["id"]), topic["id"]))
+                is_unlocked = is_level_unlocked(number, highest)
+                levels.append(
+                    {
+                        **level,
+                        "question_type": level.get("quiz_type") or _quiz_type_for_level(number),
+                        "question_count": question_count,
+                        "is_unlocked": is_unlocked,
+                        "is_locked": not is_unlocked,
+                        "is_completed": level_completed,
+                        "best_score": level_best if level_completed else 0,
+                        "progress": 100 if level_completed else 0,
+                    }
+                )
+            passed_count = sum(1 for l in levels if l["is_completed"])
+            topic_progress_pct = calculate_topic_progress(highest)
             topics.append(
                 {
                     "id": topic["id"],
                     "title": topic["title"],
                     "description": topic.get("description"),
+                    "sort_order": topic.get("order_index", 0),
                     "icon": topic.get("icon"),
-                    "progress": int(row.get("topic_progress") or calculate_topic_progress(highest)),
+                    "progress": topic_progress_pct,
+                    "progress_percent": topic_progress_pct,
+                    "is_available": True,
                     "highest_level_completed": highest,
                     "current_level": min(5, highest + 1) if highest < 5 else 5,
                     "status": "completed" if highest >= 5 else "in_progress" if highest else "available",
@@ -216,16 +288,23 @@ class QuizRepository:
             raise NotFoundError("Topik quiz tidak ditemukan.")
         return topic["levels"]
 
-    @staticmethod
-    def _normalize_question(row: dict[str, Any], topic_id: str | None = None) -> dict[str, Any]:
-        raw_options = row.get("quiz_question_options") or row.get("options") or []
+    @classmethod
+    def _normalize_question(cls, row: dict[str, Any], topic_id: str | None = None) -> dict[str, Any]:
+        raw_options = list(row.get("quiz_question_options") or row.get("options") or [])
+        raw_options.sort(key=lambda option: (int(option.get("sort_order", 0) or 0), str(option.get("option_key") or option.get("label") or "")))
         options = []
         for option in raw_options:
+            option_id = str(option.get("id") or option.get("option_id") or option.get("option_key") or option.get("label"))
+            option_key = str(option.get("option_key") or option.get("label") or "")
+            option_label = option.get("label") or option.get("text") or ""
             options.append(
                 {
-                    "id": str(option.get("option_key") or option.get("id") or option.get("label")),
-                    "label": option.get("option_key") or option.get("label") or "",
-                    "text": option.get("text") or option.get("label") or "",
+                    "id": option_id,
+                    "option_key": option_key,
+                    "label": option_label,
+                    "text": option_label,
+                    "sort_order": int(option.get("sort_order", 0) or 0),
+                    "is_correct": bool(option.get("is_correct", False)),
                 }
             )
         metadata = row.get("metadata") or {}
@@ -237,25 +316,28 @@ class QuizRepository:
             "prompt": row.get("prompt", ""),
             "explanation": row.get("explanation"),
             "options": options,
-            "correct_answer": row.get("correct_answer"),
-            "accepted_answers": row.get("accepted_answers") or metadata.get("accepted_answers") or [],
-            "matching_pairs": row.get("matching_pairs") or metadata.get("matching_pairs") or [],
+            "correct_answer": cls._safe_json_value(row.get("correct_answer")),
+            "accepted_answers": cls._safe_json_value(row.get("accepted_answers") or metadata.get("accepted_answers") or []),
+            "matching_pairs": cls._safe_json_value(row.get("matching_pairs") or metadata.get("matching_pairs") or []),
             "difficulty": str(row.get("difficulty", "easy")),
             "order_index": int(row.get("order_index", metadata.get("order_index", 0)) or 0),
+            "xp_reward": int(row.get("xp_reward", 10) or 10),
         }
 
     async def get_questions_for_level(self, level_id: str, topic_id: str | None = None) -> list[dict[str, Any]]:
-        if not self.client.settings.allow_mock_services:
-            try:
-                rows = await self.client.select(
-                    "quiz_questions",
-                    {"select": "*,quiz_question_options(*)", "level_id": f"eq.{level_id}", "is_active": "eq.true", "order": "order_index.asc"},
-                )
-                if rows:
-                    return [self._normalize_question(row, topic_id) for row in rows]
-            except Exception:
-                pass
-        return questions_for_level(level_id)
+        if self.client.settings.allow_mock_services:
+            from app.services.quiz.quiz_seed import questions_for_level
+
+            return [self._normalize_question(question, topic_id) for question in questions_for_level(level_id)]
+        try:
+            rows = await self.client.select(
+                "quiz_questions",
+                {"select": "*,quiz_question_options(*)", "level_id": f"eq.{level_id}", "is_active": "eq.true", "order": "order_index.asc"},
+            )
+        except Exception as exc:
+            logger.exception("Failed to fetch quiz questions", extra={"level_id": level_id})
+            raise AppError("QUIZ_QUESTIONS_UNAVAILABLE", "Soal quiz tidak dapat dibaca dari database.", 500) from exc
+        return [self._normalize_question(row, topic_id) for row in rows]
 
     @staticmethod
     def dedupe_questions(questions: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -269,8 +351,104 @@ class QuizRepository:
             unique.append(question)
         return unique
 
+    def _hydrate_session_questions(self, session: dict[str, Any]) -> dict[str, Any]:
+        return session
+
+    async def _is_attempt_valid(self, session: dict[str, Any], level_id: str, topic_id: str) -> bool:
+        """Check if an active attempt is still valid against current DB questions."""
+        try:
+            # level must still exist
+            try:
+                await self._level_context(level_id)
+            except NotFoundError:
+                return False
+            # fetch current questions for level
+            current_questions = await self.get_questions_for_level(level_id, topic_id)
+            if len(current_questions) < 10:
+                return False
+            # every question must have at least 4 options
+            for q in current_questions[:10]:
+                if len(q.get("options", [])) < 4:
+                    return False
+            # check if attempt's stored question IDs still match current DB
+            metadata = session.get("metadata") or {}
+            stored_ids = [str(qid) for qid in metadata.get("questions", [])]
+            if stored_ids:
+                current_ids = {str(q["id"]) for q in current_questions}
+                if not all(qid in current_ids for qid in stored_ids):
+                    return False
+            return True
+        except Exception:
+            return False
+
+    async def _abandon_attempt(self, attempt_id: str, user_id: str) -> None:
+        """Mark an active attempt as abandoned."""
+        try:
+            await self.client.update(
+                "quiz_attempts",
+                {"id": f"eq.{attempt_id}", "user_id": f"eq.{user_id}"},
+                {"status": "abandoned", "completed_at": self._now()},
+            )
+        except Exception:
+            pass
+        # also clean local cache
+        self._sessions.pop(attempt_id, None)
+        self._answers.pop(attempt_id, None)
+
+    async def find_active_session(self, user_id: str, topic_id: str, level_id: str) -> dict[str, Any] | None:
+        # check in-memory sessions first
+        for session in list(self._sessions.values()):
+            if (
+                session.get("user_id") == user_id
+                and str(session.get("level_id")) == str(level_id)
+                and session.get("topic_id") == topic_id
+                and session.get("status") == "active"
+            ):
+                if await self._is_attempt_valid(session, str(level_id), topic_id):
+                    return self._hydrate_session_questions(session)
+                else:
+                    await self._abandon_attempt(str(session["id"]), user_id)
+                    return None
+        try:
+            rows = await self.client.select(
+                "quiz_attempts",
+                {
+                    "select": "*",
+                    "user_id": f"eq.{user_id}",
+                    "level_id": f"eq.{level_id}",
+                    "status": "eq.active",
+                    "deleted_at": "is.null",
+                    "order": "started_at.desc",
+                },
+            )
+        except Exception:
+            rows = []
+        if not rows:
+            return None
+        # Abandon ALL stale active attempts (cleanup duplicates from before unique index)
+        valid_session = None
+        for row in rows:
+            if not await self._is_attempt_valid(row, str(level_id), topic_id):
+                await self._abandon_attempt(str(row["id"]), user_id)
+            elif valid_session is None:
+                # Keep the most recent valid one
+                valid_session = row
+            else:
+                # Abandon duplicates — keep only the first valid
+                await self._abandon_attempt(str(row["id"]), user_id)
+        if not valid_session:
+            return None
+        session = await self.get_session(user_id, str(valid_session["id"]))
+        metadata = session.get("metadata") or {}
+        if (metadata.get("topic_id") or topic_id) != topic_id:
+            return None
+        return self._hydrate_session_questions(session)
+
     async def create_session(self, user_id: str, topic_id: str, level_id: str, questions: list[dict[str, Any]]) -> dict[str, Any]:
         topic, level = await self._level_context(level_id)
+        active = await self.find_active_session(user_id, topic["id"], str(level_id))
+        if active:
+            return active
         session_id = str(uuid4())
         row = {
             "id": session_id,
@@ -295,20 +473,22 @@ class QuizRepository:
             pass
         self._sessions[session_id] = row | {"id": session_id, "topic_id": topic["id"], "level_id": str(level_id), "questions": questions}
         self._answers[session_id] = []
-        return self._sessions[session_id]
+        return self._hydrate_session_questions(self._sessions[session_id])
 
     async def get_session(self, user_id: str, session_id: str) -> dict[str, Any]:
         local = self._sessions.get(session_id)
         if local:
             if local["user_id"] != user_id:
-                raise NotFoundError("Sesi quiz tidak ditemukan.")
+                raise NotFoundError("Quiz attempt not found")
             return local
         try:
             rows = await self.client.select("quiz_attempts", {"select": "*", "id": f"eq.{session_id}", "user_id": f"eq.{user_id}", "limit": "1"})
         except Exception as exc:
-            raise NotFoundError("Sesi quiz tidak ditemukan.") from exc
+            logger.info("Quiz attempt lookup failed", extra={"attempt_id": session_id, "user_id": user_id})
+            raise NotFoundError("Quiz attempt not found") from exc
         if not rows:
-            raise NotFoundError("Sesi quiz tidak ditemukan.")
+            logger.info("Quiz attempt not found", extra={"attempt_id": session_id, "user_id": user_id})
+            raise NotFoundError("Quiz attempt not found")
         row = rows[0]
         topic, level = await self._level_context(str(row["level_id"]))
         questions = await self.get_questions_for_level(str(row["level_id"]), topic["id"])
@@ -329,6 +509,7 @@ class QuizRepository:
         explanation: str | None,
         is_correct: bool,
         score_delta: int,
+        duration_ms: int = 0,
     ) -> dict[str, Any]:
         await self.get_session(user_id, session_id)
         row = {
@@ -341,6 +522,8 @@ class QuizRepository:
             "user_answer": user_answer,
             "correct_answer": correct_answer,
             "is_correct": is_correct,
+            "is_skipped": False,
+            "duration_ms": duration_ms,
             "score_delta": score_delta,
             "xp_delta": 10 if is_correct else 0,
             "explanation_snapshot": explanation,
@@ -381,6 +564,7 @@ class QuizRepository:
         wrong = max(0, answered_count - correct)
         score = int((correct / len(questions)) * 100) if questions else 0
         completed = answered_count >= len(questions)
+        was_completed = session.get("status") == "completed"
         topic, level = await self._level_context(str(session["level_id"]))
         level_number = int(level["level_number"])
         passed = score >= int(level.get("passing_score", 70) or 70) if completed else None
@@ -403,7 +587,7 @@ class QuizRepository:
             await self.client.update("quiz_attempts", {"id": f"eq.{session_id}", "user_id": f"eq.{user_id}"}, patch)
         except Exception:
             pass
-        if completed:
+        if completed and not was_completed:
             await self.update_user_progress(user_id, topic["id"], str(session["level_id"]), score, xp_earned)
         return {
             "completed": completed,
@@ -417,28 +601,125 @@ class QuizRepository:
             "next_level_unlocked": bool(passed) and level_number < 5,
         }
 
-    async def submit_answer(self, user_id: str, session_id: str, question_id: str, user_answer: Any) -> dict[str, Any]:
+    async def submit_answer(
+        self,
+        user_id: str,
+        session_id: str,
+        question_id: str,
+        user_answer: Any = None,
+        selected_option_id: str | None = None,
+        elapsed_ms: int = 0,
+    ) -> dict[str, Any]:
         session = await self.get_session(user_id, session_id)
+        if session.get("status") == "completed":
+            logger.info("Quiz answer rejected: attempt completed", extra={"attempt_id": session_id, "user_id": user_id})
+            raise BadRequestError("Quiz attempt already completed")
         questions = session.get("questions") or []
         allowed_ids = {str(q["id"]) for q in questions}
         if str(question_id) not in allowed_ids:
-            raise NotFoundError("Pertanyaan tidak ditemukan dalam session ini.")
+            logger.info("Quiz answer rejected: question not in attempt", extra={"attempt_id": session_id, "user_id": user_id, "question_id": question_id})
+            raise ConflictError(
+                message="Question does not belong to this quiz attempt",
+                code="QUESTION_NOT_IN_ATTEMPT",
+                details={
+                    "attempt_level_id": str(session.get("level_id", "")),
+                    "question_level_id": question_id,
+                    "message": "Question does not belong to this quiz attempt",
+                },
+            )
         question = next(q for q in questions if str(q["id"]) == str(question_id))
-        correct = is_answer_correct(question["question_type"], question["correct_answer"], user_answer, question.get("accepted_answers"))
-        await self.save_answer(user_id, session_id, question_id, user_answer, question["correct_answer"], question.get("explanation"), correct, 10 if correct else 0)
+        question_type = question.get("question_type", "multiple_choice")
+        option = None
+        correct_option = None
+        correct_answer = self._display_answer(question.get("correct_answer"))
+        if not selected_option_id and user_answer is not None and question_type in {"multiple_choice", "case_based"}:
+            selected_option_id = str(user_answer)
+        if selected_option_id:
+            option = next(
+                (
+                    opt
+                    for opt in question.get("options", [])
+                    if str(opt.get("id")) == str(selected_option_id)
+                    or str(opt.get("option_key")) == str(selected_option_id)
+                ),
+                None,
+            )
+            if not option:
+                logger.info(
+                    "Quiz answer rejected: selected option not found",
+                    extra={"attempt_id": session_id, "user_id": user_id, "question_id": question_id, "selected_option_id": selected_option_id},
+                )
+                raise NotFoundError("Quiz selected option not found")
+        elif question_type in {"multiple_choice", "case_based"}:
+            raise NotFoundError("Quiz selected option not found")
+        correct_option = next((opt for opt in question.get("options", []) if opt.get("is_correct")), None)
+        if not correct_option:
+            correct_option = next(
+                (
+                    opt
+                    for opt in question.get("options", [])
+                    if str(opt.get("id")) == str(correct_answer)
+                    or str(opt.get("option_key")) == str(correct_answer)
+                    or str(opt.get("text")) == str(correct_answer)
+                    or str(opt.get("label")) == str(correct_answer)
+                ),
+                None,
+            )
+        if option:
+            if not correct_option:
+                logger.error("Quiz question has no correct option", extra={"question_id": question_id})
+                raise AppError("QUIZ_CORRECT_OPTION_NOT_FOUND", "Soal belum memiliki jawaban benar.", 500)
+            correct = str(option["id"]) == str(correct_option["id"])
+            if correct_answer in (None, ""):
+                correct_answer = correct_option.get("text") or correct_option.get("label")
+            normalized_answer = {
+                "selected_option_id": str(option["id"]),
+                "selected_option_key": option.get("option_key"),
+                "text": option.get("text"),
+            }
+        else:
+            correct = is_answer_correct(question_type, question["correct_answer"], user_answer, question.get("accepted_answers"))
+            normalized_answer = user_answer
+        logger.info(
+            "Submitting quiz answer",
+            extra={"attempt_id": session_id, "user_id": user_id, "question_id": question_id, "selected_option_id": selected_option_id},
+        )
+        await self.save_answer(
+            user_id,
+            session_id,
+            question_id,
+            normalized_answer,
+            correct_answer,
+            question.get("explanation"),
+            correct,
+            10 if correct else 0,
+            elapsed_ms,
+        )
         completion = await self.complete_session_if_done(user_id, session_id)
         return {
+            "attempt_id": session_id,
+            "session_id": session_id,
+            "question_id": question_id,
+            "selected_option_id": str(option["id"]) if option else None,
+            "selected_option_key": option.get("option_key") if option else None,
+            "is_correct": correct,
             "correct": correct,
-            "correct_answer": question["correct_answer"],
+            "correct_option_id": str(correct_option["id"]) if correct_option else None,
+            "correct_option_key": correct_option.get("option_key") if correct_option else None,
+            "correct_answer": correct_answer,
             "explanation": question.get("explanation"),
-            "score_delta": 10 if correct else 0,
-            "xp_delta": 10 if correct else 0,
-            "session_completed": completion["completed"],
+            "current_question_index": completion.get("current_question_index"),
+            "next_question_index": completion.get("current_question_index"),
+            "total_questions": completion.get("total_questions", len(questions)),
+            "score": completion["score"],
             "session_score": completion["score"],
             "correct_count": completion.get("correct_count", 0),
             "wrong_count": completion.get("wrong_count", 0),
-            "total_questions": completion.get("total_questions", len(questions)),
-            "next_question_index": completion.get("current_question_index"),
+            "is_completed": completion["completed"],
+            "session_completed": completion["completed"],
+            "xp_earned": completion.get("xp_earned", 0),
+            "xp_delta": 10 if correct else 0,
+            "score_delta": 10 if correct else 0,
             "passed": completion.get("passed"),
             "next_level_unlocked": completion.get("next_level_unlocked", False),
         }
@@ -506,8 +787,10 @@ class QuizRepository:
         topic, level = await self._level_context(str(session["level_id"]))
         score = int(session.get("score", 0) or 0)
         passing_score = int(level.get("passing_score", 70) or 70)
+        started_at = session.get("started_at")
         return {
             "session_id": str(session["id"]),
+            "attempt_id": str(session["id"]),
             "id": str(session["id"]),
             "topic_id": topic["id"],
             "topic_title": topic["title"],
@@ -515,20 +798,58 @@ class QuizRepository:
             "level_number": int(level["level_number"]),
             "quiz_type": level["quiz_type"],
             "score": score,
+            "total_questions": int(session.get("total_questions", 0) or 0),
             "xp_earned": int(session.get("xp_earned", 0) or 0),
             "status": session.get("status", "active"),
             "passed": bool(session.get("passed", score >= passing_score)),
-            "started_at": session.get("started_at"),
+            "started_at": started_at,
+            "created_at": started_at,
+            "date": started_at,
             "completed_at": session.get("completed_at"),
         }
 
     async def get_history(self, user_id: str) -> dict[str, list[dict[str, Any]]]:
-        local = [await self._session_history_item(session) for session in self._sessions.values() if session["user_id"] == user_id and session.get("status") == "completed"]
+        async def clean(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            seen_ids: set[str] = set()
+            completed_keys = {
+                (item["topic_id"], item["level_id"])
+                for item in items
+                if item.get("status") == "completed"
+            }
+            result = []
+            for item in items:
+                item_id = str(item["id"])
+                if item_id in seen_ids:
+                    continue
+                seen_ids.add(item_id)
+                key = (item["topic_id"], item["level_id"])
+                # Hide empty active attempts that have a completed counterpart
+                if item.get("status") == "active" and key in completed_keys and int(item.get("score", 0) or 0) == 0:
+                    continue
+                # Validate active attempts - abandon stale ones
+                if item.get("status") == "active":
+                    level_id = str(item.get("level_id", ""))
+                    topic_id = str(item.get("topic_id", ""))
+                    try:
+                        current_questions = await self.get_questions_for_level(level_id, topic_id)
+                        if len(current_questions) < 10:
+                            await self._abandon_attempt(item_id, user_id)
+                            continue
+                    except Exception:
+                        pass
+                result.append(item)
+            return result
+
+        local = [
+            await self._session_history_item(session)
+            for session in self._sessions.values()
+            if session["user_id"] == user_id and session.get("status") in {"active", "completed"}
+        ]
         try:
             rows = await self.client.select("quiz_attempts", {"select": "*", "user_id": f"eq.{user_id}", "deleted_at": "is.null", "order": "started_at.desc"})
-            return {"history": [await self._session_history_item(row) for row in rows] if rows else local}
+            return {"history": await clean([await self._session_history_item(row) for row in rows] if rows else local)}
         except Exception:
-            return {"history": local}
+            return {"history": await clean(local)}
 
     async def get_summary(self, user_id: str, session_id: str) -> dict[str, Any]:
         session = await self.get_session(user_id, session_id)
@@ -542,12 +863,21 @@ class QuizRepository:
         explanations = []
         for question in questions:
             answer = answer_by_question.get(str(question["id"]), {})
+            user_answer = answer.get("user_answer") or answer.get("answer") or {}
+            selected_option_id = user_answer.get("selected_option_id") if isinstance(user_answer, dict) else None
+            selected_option = next((opt for opt in question.get("options", []) if str(opt.get("id")) == str(selected_option_id)), None)
+            correct_option = next((opt for opt in question.get("options", []) if opt.get("is_correct")), None)
+            correct_answer = self._display_answer(answer.get("correct_answer") or question.get("correct_answer"))
+            if correct_answer in (None, "") and correct_option:
+                correct_answer = correct_option.get("text") or correct_option.get("label")
             explanations.append(
                 {
                     "question_id": question["id"],
                     "prompt": question.get("prompt"),
-                    "user_answer": answer.get("user_answer") or answer.get("answer"),
-                    "correct_answer": question.get("correct_answer"),
+                    "user_answer": user_answer,
+                    "selected_option": ({k: v for k, v in selected_option.items() if k != "is_correct"} if selected_option else None),
+                    "correct_option": ({k: v for k, v in correct_option.items() if k != "is_correct"} if correct_option else None),
+                    "correct_answer": correct_answer,
                     "is_correct": bool(answer.get("is_correct", False)),
                     "explanation": question.get("explanation") or answer.get("explanation_snapshot"),
                 }

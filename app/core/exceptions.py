@@ -24,9 +24,19 @@ class ForbiddenError(AppError):
         super().__init__("FORBIDDEN", message, 403)
 
 
+class BadRequestError(AppError):
+    def __init__(self, message: str = "Permintaan tidak valid."):
+        super().__init__("BAD_REQUEST", message, 400)
+
+
 class NotFoundError(AppError):
     def __init__(self, message: str = "Data tidak ditemukan."):
         super().__init__("RESOURCE_NOT_FOUND", message, 404)
+
+
+class ConflictError(AppError):
+    def __init__(self, message: str = "Data konflik.", code: str = "CONFLICT", details: dict[str, Any] | None = None):
+        super().__init__(code, message, 409, details)
 
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:

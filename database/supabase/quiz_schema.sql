@@ -28,3 +28,8 @@ create index if not exists idx_quiz_questions_level_order on public.quiz_questio
 create index if not exists idx_quiz_attempts_user_started on public.quiz_attempts(user_id, started_at desc);
 create index if not exists idx_quiz_answers_attempt on public.quiz_answers(attempt_id);
 create index if not exists idx_quiz_progress_user_level on public.quiz_progress(user_id, level_id);
+
+-- Prevent duplicate active quiz attempts for same user+level
+create unique index if not exists uq_active_quiz_attempt_per_user_level
+  on public.quiz_attempts (user_id, level_id)
+  where status = 'active';

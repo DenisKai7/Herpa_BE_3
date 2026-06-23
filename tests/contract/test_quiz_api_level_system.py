@@ -52,15 +52,30 @@ def _correct_answer(raw_question: dict):
     return answer
 
 
+def _correct_option_id(question: dict, raw_question: dict):
+    answer = _correct_answer(raw_question)
+    for option in question.get("options", []):
+        if option.get("id") == answer or option.get("text") == answer:
+            return option["id"]
+    for option in question.get("options", []):
+        if option.get("label") == answer:
+            return option["id"]
+    return question["options"][0]["id"]
+
+
 def _complete_session(client: TestClient, service: QuizService, topic_id: str = "struktur-atom", level_number: int = 1):
     session = client.post("/api/quiz/sessions", json={"topic_id": topic_id, "level_number": level_number}).json()
     raw_questions = {q["id"]: q for q in service.repository._sessions[session["id"]]["questions"]}
     for question in session["questions"]:
-        answer = _correct_answer(raw_questions[question["id"]])
-        client.post(
-            f"/api/quiz/sessions/{session['id']}/answer",
-            json={"question_id": question["id"], "answer": answer},
-        )
+        raw_question = raw_questions[question["id"]]
+        payload = {"question_id": question["id"], "answer": _correct_answer(raw_question)}
+        if question["question_type"] in {"multiple_choice", "case_based"}:
+            payload = {
+                "question_id": question["id"],
+                "selected_option_id": _correct_option_id(question, raw_question),
+                "elapsed_ms": 100,
+            }
+        client.post(f"/api/quiz/sessions/{session['id']}/answer", json=payload)
     return session
 
 
@@ -302,3 +317,108 @@ def test_user_cannot_access_other_user_session(quiz_client):
     app.dependency_overrides[get_current_user] = user_two
     response = client.get(f"/api/quiz/sessions/{session['id']}")
     assert response.status_code == 404
+
+
+def test_submit_answer_accepts_selected_option_payload(quiz_client):
+    client, service = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 1}).json()
+    question = session["questions"][0]
+    raw_question = service.repository._sessions[session["id"]]["questions"][0]
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={
+            "question_id": question["id"],
+            "selected_option_id": _correct_option_id(question, raw_question),
+            "elapsed_ms": 321,
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["correct"] is True
+    assert service.repository._answers[session["id"]][0]["duration_ms"] == 321
+
+
+def test_submit_answer_invalid_attempt_returns_404(quiz_client):
+    client, _ = quiz_client
+    response = client.post(
+        "/api/quiz/sessions/missing/answer",
+        json={"question_id": "q", "selected_option_id": "o", "elapsed_ms": 0},
+    )
+    assert response.status_code == 404
+
+
+def test_submit_answer_invalid_question_returns_404(quiz_client):
+    client, _ = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 1}).json()
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={"question_id": "missing", "selected_option_id": "o", "elapsed_ms": 0},
+    )
+    assert response.status_code == 404
+
+
+def test_submit_answer_invalid_option_returns_404(quiz_client):
+    client, _ = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 1}).json()
+    question = session["questions"][0]
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={"question_id": question["id"], "selected_option_id": "missing", "elapsed_ms": 0},
+    )
+    assert response.status_code == 404
+
+
+def test_submit_answer_completed_attempt_returns_400(quiz_client):
+    client, service = quiz_client
+    session = _complete_session(client, service, level_number=1)
+    question = session["questions"][0]
+    response = client.post(
+        f"/api/quiz/sessions/{session['id']}/answer",
+        json={"question_id": question["id"], "selected_option_id": question["options"][0]["id"], "elapsed_ms": 0},
+    )
+    assert response.status_code == 400
+
+
+def test_completion_does_not_double_xp(quiz_client):
+    client, service = quiz_client
+    session = _complete_session(client, service, level_number=1)
+    assert client.get("/api/quiz/progress").json()["total_xp"] == 120
+    client.post(f"/api/quiz/sessions/{session['id']}/complete")
+    assert client.get("/api/quiz/progress").json()["total_xp"] == 120
+
+
+def test_create_session_reuses_active_attempt(quiz_client):
+    client, _ = quiz_client
+    first = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 1}).json()
+    second = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 1}).json()
+    assert second["id"] == first["id"]
+
+
+def test_multiple_choice_options_are_shuffled_but_stable(quiz_client):
+    client, _ = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 1}).json()
+    fetched = client.get(f"/api/quiz/sessions/{session['id']}").json()
+    assert [o["id"] for o in fetched["questions"][0]["options"]] == [o["id"] for o in session["questions"][0]["options"]]
+    labels = [option["label"] for option in session["questions"][0]["options"]]
+    assert labels == ["A", "B", "C", "D"]
+
+
+def test_dashboard_returns_progress_topics_and_active_sessions(quiz_client):
+    client, _ = quiz_client
+    session = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 1}).json()
+    response = client.get("/api/quiz/dashboard")
+    assert response.status_code == 200
+    data = response.json()
+    assert "progress" in data
+    assert len(data["topics"]) == 16
+    assert any(item["session_id"] == session["id"] and item["status"] == "active" for item in data["active_sessions"])
+
+
+def test_history_includes_active_continue_without_empty_duplicate_after_completion(quiz_client):
+    client, service = quiz_client
+    active = client.post("/api/quiz/sessions", json={"topic_id": "struktur-atom", "level_number": 1}).json()
+    rows = client.get("/api/quiz/history").json()["history"]
+    assert any(row["session_id"] == active["id"] and row["status"] == "active" for row in rows)
+    completed = _complete_session(client, service, level_number=1)
+    rows = client.get("/api/quiz/history").json()["history"]
+    assert any(row["session_id"] == completed["id"] and row["status"] == "completed" for row in rows)
+    assert not any(row["session_id"] == active["id"] and row["status"] == "active" for row in rows)

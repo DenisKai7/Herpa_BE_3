@@ -332,28 +332,32 @@ class QuizService:
     async def topics(self, user_id: str) -> list[dict[str, Any]]:
         return await self.repository.get_topics_with_progress(user_id)
 
-    async def create_session(self, user_id: str, topic_id: str, level_id: str | None, level_number: int | None):
-        from app.services.quiz.quiz_seed import get_fallback_questions, merge_and_dedupe_questions
-
-        level = await self.repository._find_level(topic_id, level_id=level_id, level_number=level_number or None)
-        if not level:
+    async def create_session(self, user_id: str, topic_id: str | None, level_id: str | None, level_number: int | None):
+        level = await self.repository.find_level_by_id(level_id) if level_id else None
+        if not level and topic_id:
             level = await self.repository._find_level(topic_id, level_number=level_number or 1)
         if not level:
             raise NotFoundError("Level quiz tidak ditemukan.")
+        topic_id = level["topic_id"]
         level_id = level["id"]
-        level_number = int(level["level_number"])
-        questions = await self.repository.get_questions_for_level(level_id, topic_id)
-        fallback_questions = get_fallback_questions(topic_id, level_number)
-        questions = self.repository.dedupe_questions(merge_and_dedupe_questions(questions, fallback_questions))[:10]
+        questions = (await self.repository.get_questions_for_level(level_id, topic_id))[:10]
         if len(questions) < 10:
-            raise NotFoundError("Level belum memiliki minimal 10 soal aktif.")
+            raise NotFoundError("Level belum memiliki minimal 10 soal aktif di database.")
         return await self.repository.create_session(user_id, topic_id, level_id, questions)
 
     async def get_session(self, user_id: str, session_id: str):
         return await self.repository.get_session(user_id, session_id)
 
-    async def submit_session_answer(self, user_id: str, session_id: str, question_id: str, answer: Any):
-        return await self.repository.submit_answer(user_id, session_id, question_id, answer)
+    async def submit_session_answer(
+        self,
+        user_id: str,
+        session_id: str,
+        question_id: str,
+        answer: Any = None,
+        selected_option_id: str | None = None,
+        elapsed_ms: int = 0,
+    ):
+        return await self.repository.submit_answer(user_id, session_id, question_id, answer, selected_option_id, elapsed_ms)
 
     async def session_summary(self, user_id: str, session_id: str):
         return await self.repository.get_summary(user_id, session_id)

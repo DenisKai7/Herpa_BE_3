@@ -187,3 +187,138 @@ export interface QuizCompletion {
   next_level_unlocked: boolean;
   analisis_performa: { sorotan: string[]; area_fokus: string[] };
 }
+
+export type QuizQuestionType = "multiple_choice" | "matching" | "true_false" | "short_answer" | "case_based";
+
+export type QuizOption = {
+  id: string;
+  label: string;
+  text: string;
+};
+
+export type QuizQuestion = {
+  id: string;
+  topic_id: string;
+  level_id: string;
+  question_type: QuizQuestionType;
+  prompt: string;
+  options: QuizOption[];
+  matching_pairs: unknown[];
+  difficulty: string;
+};
+
+export type QuizLevel = {
+  id: string;
+  topic_id: string;
+  level_number: number;
+  title: string;
+  description?: string | null;
+  quiz_type: string;
+  xp_reward: number;
+  passing_score: number;
+  is_locked: boolean;
+  is_completed: boolean;
+  progress: number;
+};
+
+export type QuizTopic = {
+  id: string;
+  title: string;
+  description?: string | null;
+  order_index?: number;
+  icon?: string | null;
+  progress: number;
+  highest_level_completed: number;
+  current_level: number;
+  status: string;
+  levels: QuizLevel[];
+};
+
+export type QuizProgress = {
+  total_xp: number;
+  level: number;
+  completed_topics: number;
+  completed_levels: number;
+  current_streak: number;
+  topic_progress: Record<string, unknown>[];
+};
+
+export type QuizSession = {
+  id: string;
+  topic_id: string;
+  level_id: string;
+  status: "active" | "completed" | string;
+  score: number;
+  total_questions: number;
+  current_question_index: number;
+  questions: QuizQuestion[];
+};
+
+export type StartQuizSessionPayload = {
+  topic_id: string;
+  level_id?: string | null;
+  level_number?: number | null;
+};
+
+export type SubmitQuizAnswerPayload = {
+  question_id: string;
+  selected_option_id?: string | null;
+  elapsed_ms?: number;
+  answer?: unknown;
+};
+
+export type SubmitQuizAnswerResponse = {
+  correct: boolean;
+  correct_answer?: unknown;
+  explanation?: string | null;
+  score_delta: number;
+  xp_delta: number;
+  session_completed: boolean;
+  session_score: number;
+  correct_count: number;
+  wrong_count: number;
+  total_questions: number;
+  next_question_index?: number | null;
+  passed?: boolean | null;
+  next_level_unlocked: boolean;
+};
+
+export type QuizHistoryItem = {
+  session_id: string;
+  id: string;
+  topic_id: string;
+  topic_title: string;
+  level_id: string;
+  level_number: number;
+  quiz_type: string;
+  score: number;
+  xp_earned: number;
+  status: "active" | "completed" | string;
+  passed: boolean;
+  started_at?: string | null;
+  completed_at?: string | null;
+};
+
+export type QuizHistoryResponse = { history: QuizHistoryItem[] };
+
+export type QuizSessionSummary = Omit<QuizHistoryItem, "id" | "started_at" | "completed_at"> & {
+  correct_count: number;
+  wrong_count: number;
+  total_questions: number;
+  next_level_unlocked: boolean;
+  next_level_number?: number | null;
+  explanations: Array<{
+    question_id: string;
+    prompt?: string;
+    user_answer?: unknown;
+    correct_answer?: unknown;
+    is_correct: boolean;
+    explanation?: string | null;
+  }>;
+};
+
+export type QuizDashboard = {
+  progress: QuizProgress;
+  topics: QuizTopic[];
+  active_sessions: QuizHistoryItem[];
+};

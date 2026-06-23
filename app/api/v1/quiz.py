@@ -93,6 +93,15 @@ async def quiz_topics(user: CurrentUser = Depends(get_current_user), services: S
     return await services.quiz_service.topics(user.id)
 
 
+@router.get("/api/quiz/dashboard")
+async def quiz_dashboard(user: CurrentUser = Depends(get_current_user), services: Services = Depends(get_services)):
+    progress = await services.quiz_service.new_progress(user.id)
+    topics = await services.quiz_service.topics(user.id)
+    history = await services.quiz_service.new_history(user.id)
+    active_sessions = [item for item in history.get("history", []) if item.get("status") == "active"]
+    return {"progress": progress, "topics": topics.get("topics", []), "active_sessions": active_sessions}
+
+
 @router.post("/api/quiz/sessions")
 async def create_quiz_session(
     payload: StartQuizSessionRequest,
@@ -103,27 +112,16 @@ async def create_quiz_session(
     questions = session.get("questions") or await services.quiz_service.repository.get_questions_for_level(
         session["level_id"], session["topic_id"]
     )
-    public_questions = [
-        {
-            "id": q["id"],
-            "topic_id": q["topic_id"],
-            "level_id": q["level_id"],
-            "question_type": q["question_type"],
-            "prompt": q["prompt"],
-            "options": q.get("options", []),
-            "matching_pairs": q.get("matching_pairs", []),
-            "difficulty": q.get("difficulty", "easy"),
-        }
-        for q in questions
-    ]
+    public_questions = [services.quiz_service.repository._public_question(q) for q in questions]
     return {
         "id": session["id"],
+        "attempt_id": session["id"],
         "topic_id": session["topic_id"],
         "level_id": session["level_id"],
         "status": session.get("status", "active"),
         "score": session.get("score", 0),
         "total_questions": session.get("total_questions", len(public_questions)),
-        "current_question_index": 0,
+        "current_question_index": session.get("current_question_index", 0),
         "questions": public_questions,
     }
 
@@ -138,27 +136,25 @@ async def get_quiz_session(
     questions = session.get("questions") or await services.quiz_service.repository.get_questions_for_level(
         session["level_id"], session["topic_id"]
     )
+    answers = await services.quiz_service.repository._answers_for_session(session_id)
+    answer_by_question = {str(answer["question_id"]): answer for answer in answers}
+    public_questions = []
+    for question in questions:
+        item = services.quiz_service.repository._public_question(question)
+        answer = answer_by_question.get(str(question["id"]))
+        if answer:
+            item["user_answer"] = answer.get("answer") or answer.get("user_answer")
+        public_questions.append(item)
     return {
         "id": session["id"],
+        "attempt_id": session["id"],
         "topic_id": session["topic_id"],
         "level_id": session["level_id"],
         "status": session.get("status", "active"),
         "score": session.get("score", 0),
         "total_questions": session.get("total_questions", len(questions)),
-        "current_question_index": len(services.quiz_service.repository._answers.get(session_id, [])),
-        "questions": [
-            {
-                "id": q["id"],
-                "topic_id": q["topic_id"],
-                "level_id": q["level_id"],
-                "question_type": q["question_type"],
-                "prompt": q["prompt"],
-                "options": q.get("options", []),
-                "matching_pairs": q.get("matching_pairs", []),
-                "difficulty": q.get("difficulty", "easy"),
-            }
-            for q in questions
-        ],
+        "current_question_index": session.get("current_question_index", len(answers)),
+        "questions": public_questions,
     }
 
 
@@ -199,24 +195,28 @@ async def quiz_topic_level_detail(
             questions = await services.quiz_service.repository.get_questions_for_level(level["id"], topic_id)
             return {
                 **level,
-                "questions": [
-                    {k: v for k, v in q.items() if k not in {"correct_answer", "explanation", "accepted_answers"}}
-                    for q in questions[:10]
-                ],
+                "questions": [services.quiz_service.repository._public_question(q) for q in questions[:10]],
             }
     from app.core.exceptions import NotFoundError
 
     raise NotFoundError("Level quiz tidak ditemukan.")
 
 
-@router.post("/api/quiz/sessions/{session_id}/answer")
+@router.post("/api/quiz/sessions/{attempt_id}/answer")
 async def submit_quiz_answer(
-    session_id: str,
+    attempt_id: str,
     payload: SubmitAnswerRequest,
     user: CurrentUser = Depends(get_current_user),
     services: Services = Depends(get_services),
 ):
-    return await services.quiz_service.submit_session_answer(user.id, session_id, payload.question_id, payload.answer)
+    return await services.quiz_service.submit_session_answer(
+        user.id,
+        attempt_id,
+        payload.question_id,
+        payload.answer,
+        payload.selected_option_id,
+        payload.elapsed_ms,
+    )
 
 
 @router.post("/api/quiz/sessions/{session_id}/complete")

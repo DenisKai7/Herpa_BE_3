@@ -7,11 +7,14 @@ def calculate_user_level(total_xp: int) -> int:
     return max(1, int(total_xp) // 100 + 1)
 
 
-def calculate_topic_progress(highest_level_completed: int) -> int:
-    return min(100, int((max(0, highest_level_completed) / 5) * 100))
+def calculate_topic_progress(highest_level_completed: int, total_levels: int = 5) -> int:
+    """progress_percent = levels passed / total * 100"""
+    return min(100, int((max(0, highest_level_completed) / total_levels) * 100))
 
 
 def is_level_unlocked(level_number: int, highest_level_completed: int) -> bool:
+    """Level 1 always unlocked. Level N unlocked if Level N-1 completed with score >= PASSING_SCORE.
+    The caller must ensure highest_level_completed only counts levels with best_score >= 70."""
     return level_number <= 1 or highest_level_completed >= level_number - 1
 
 

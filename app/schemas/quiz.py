@@ -50,7 +50,7 @@ class QuizQuestionResponse(BaseModel):
 
 
 class StartQuizSessionRequest(BaseModel):
-    topic_id: str
+    topic_id: str | None = None
     level_id: str | None = None
     level_number: int | None = Field(default=None, ge=1, le=5)
 
@@ -68,7 +68,9 @@ class QuizSessionResponse(BaseModel):
 
 class SubmitAnswerRequest(BaseModel):
     question_id: str
-    answer: Any
+    selected_option_id: str | None = None
+    elapsed_ms: int = Field(default=0, ge=0)
+    answer: Any | None = None
 
 
 class SubmitAnswerResponse(BaseModel):
