@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.dependencies.roles import require_admin
@@ -5,6 +6,7 @@ from app.api.dependencies.services import Services, get_services
 from app.models.admin import AdminAnalytics, UpdateUserRoleRequest, UpdateUserStatusRequest
 from app.models.auth import CurrentUser
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Admin"])
 
 
@@ -96,22 +98,61 @@ async def feature_usage(
     return await services.admin.feature_usage(date_from, date_to)
 
 
-@router.get("/api/v1/admin/usage/models")
+@router.get("/api/admin/model-usage")
+@router.get("/api/v1/admin/usage/models", include_in_schema=False)
 async def model_usage(
     admin: CurrentUser = Depends(require_admin), services: Services = Depends(get_services)
 ):
-    return await services.admin.model_usage()
+    try:
+        return await services.admin.get_model_usage()
+    except Exception as exc:
+        logger.exception("Failed to get model usage")
+        return {
+            "total_requests": 0,
+            "avg_latency_ms": 0.0,
+            "error_rate": 0.0,
+            "entries": [],
+            "summary": {
+                "total_requests": 0,
+                "total_tokens": 0,
+                "total_prompt_tokens": 0,
+                "total_completion_tokens": 0,
+                "text_model_requests": 0,
+                "vision_model_requests": 0,
+                "failed_requests": 0
+            },
+            "by_model": [],
+            "daily_usage": [],
+            "recent_requests": []
+        }
 
 
-@router.get("/api/v1/admin/usage/storage")
+@router.get("/api/admin/storage-stats")
+@router.get("/api/v1/admin/usage/storage", include_in_schema=False)
 async def storage_usage(
     admin: CurrentUser = Depends(require_admin),
     services: Services = Depends(get_services),
-) -> dict:
-    if services.settings.allow_mock_services:
-        return {"total_bytes": 0, "objects": 0, "buckets": {}}
-    rows = await services.supabase.request("POST", "rpc/admin_storage_summary", json={})
-    return rows or {"total_bytes": 0, "objects": 0, "buckets": {}}
+):
+    try:
+        return await services.admin.get_storage_stats(services)
+    except Exception as exc:
+        logger.exception("Failed to get storage stats")
+        return {
+            "status": "unavailable",
+            "buckets": [],
+            "total_size_bytes": 0,
+            "failed_uploads": 0,
+            "summary": {
+                "total_files": 0,
+                "total_size_bytes": 0,
+                "total_attachments": 0,
+                "image_files": 0,
+                "document_files": 0,
+                "failed_processing": 0
+            },
+            "by_mime_type": [],
+            "recent_files": []
+        }
 
 
 @router.get("/api/v1/admin/audit-logs")
@@ -119,11 +160,136 @@ async def audit_logs(admin: CurrentUser = Depends(require_admin), services: Serv
     return await services.admin.audit_logs()
 
 
-@router.get("/api/v1/admin/system-health")
+@router.get("/api/admin/health")
+@router.get("/api/v1/admin/system-health", include_in_schema=False)
 async def health(admin: CurrentUser = Depends(require_admin), services: Services = Depends(get_services)):
-    return {
-        "supabase": await services.supabase.health(),
-        "neo4j": await services.neo4j.health(),
-        "minio": await services.storage.health(),
-        "models": await services.model_gateway.health(),
-    }
+    try:
+        return await services.admin.get_system_health(services)
+    except Exception as exc:
+        logger.exception("Failed to get system health")
+        return {
+            "overall": "degraded",
+            "services": {
+                "fastapi": {"status": "ok", "message": "Connected"},
+                "supabase": {"status": "down", "message": f"Error: {str(exc)}"},
+                "neo4j": {"status": "unknown", "message": "Not checkable"},
+                "minio": {"status": "unknown", "message": "Not checkable"},
+                "llm_text": {"status": "down", "message": "Text model unavailable"},
+                "llm_vlm": {"status": "down", "message": "Vision model unavailable"}
+            }
+        }
+
+
+@router.get("/api/admin/graph-stats")
+async def graph_stats(
+    admin: CurrentUser = Depends(require_admin), services: Services = Depends(get_services)
+):
+    try:
+        return await services.admin.get_graph_stats(services)
+    except Exception as exc:
+        logger.exception("Failed to get graph stats")
+        return {
+            "status": "unavailable",
+            "herb_count": 0,
+            "compound_count": 0,
+            "traditional_use_count": 0,
+            "preparation_method_count": 0,
+            "usage_guideline_count": 0,
+            "safety_warning_count": 0,
+            "source_count": 0,
+            "fulltext_index_status": "unknown",
+            "neo4j_latency_ms": 0,
+            "last_enrichment_at": None,
+            "summary": {
+                "total_nodes": 0,
+                "total_relationships": 0,
+                "herbs": 0,
+                "compounds": 0,
+                "benefits": 0,
+                "sources": 0
+            },
+            "labels": [],
+            "relationships": [],
+            "message": f"Error: {str(exc)}"
+        }
+
+
+@router.get("/api/admin/recommendation-analytics")
+async def recommendation_analytics(
+    admin: CurrentUser = Depends(require_admin), services: Services = Depends(get_services)
+):
+    try:
+        return await services.admin.get_recommendation_analytics()
+    except Exception as exc:
+        logger.exception("Failed to get recommendation analytics")
+        return {
+            "total_sessions": 0,
+            "top_complaints": [],
+            "top_herbs": [],
+            "no_result_rate": 0.0,
+            "avg_latency_ms": 0.0,
+            "failure_rate": 0.0,
+            "common_warnings": [],
+            "summary": {
+                "total_recommendations": 0,
+                "total_searches": 0,
+                "top_herbs": [],
+                "top_symptoms": [],
+                "success_rate": 0.0
+            },
+            "daily": [],
+            "recent": []
+        }
+
+
+@router.get("/api/admin/quiz-analytics")
+async def quiz_analytics(
+    admin: CurrentUser = Depends(require_admin), services: Services = Depends(get_services)
+):
+    try:
+        return await services.admin.get_quiz_analytics()
+    except Exception as exc:
+        logger.exception("Failed to get quiz analytics")
+        return {
+            "total_sessions": 0,
+            "completion_rate": 0.0,
+            "avg_score": 0.0,
+            "top_weak_topics": [],
+            "daily_active_learners": 0,
+            "summary": {
+                "total_modules": 0,
+                "total_levels": 0,
+                "total_questions": 0,
+                "total_attempts": 0,
+                "completed_attempts": 0,
+                "average_score": 0.0,
+                "total_answers": 0
+            },
+            "by_topic": [],
+            "by_level": [],
+            "recent_attempts": []
+        }
+
+
+@router.get("/api/admin/errors")
+async def errors(
+    limit: int = Query(50, ge=1, le=200),
+    unresolved_only: bool = Query(False),
+    admin: CurrentUser = Depends(require_admin),
+    services: Services = Depends(get_services)
+):
+    try:
+        return await services.admin.get_recent_errors(limit, unresolved_only)
+    except Exception as exc:
+        logger.exception("Failed to get error logs")
+        return {
+            "errors": [],
+            "total": 0,
+            "unresolved_count": 0,
+            "summary": {
+                "total_errors": 0,
+                "unresolved_errors": 0,
+                "last_24h": 0
+            },
+            "items": []
+        }
