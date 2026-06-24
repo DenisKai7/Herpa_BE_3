@@ -58,3 +58,15 @@ class AttachmentStatusResponse(BaseModel):
     detected_type: str | None = None
     retryable: bool = False
     error: dict | None = None
+
+
+class VisionDebugResponse(BaseModel):
+    attachment_id: str
+    mime_type: str
+    processing_status: str
+    visual_analysis: dict
+    vlm_called: bool
+    vlm_model: str | None = None
+    last_processed_at: str | None = None
+    content_hash: str | None = None
+

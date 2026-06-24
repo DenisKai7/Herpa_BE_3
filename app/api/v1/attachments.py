@@ -9,6 +9,7 @@ from app.models.attachment import (
     FileUploadResponse,
     PresignUploadRequest,
     PresignUploadResponse,
+    VisionDebugResponse,
 )
 from app.models.auth import CurrentUser
 
@@ -64,6 +65,45 @@ async def retry(
     services: Services = Depends(get_services),
 ) -> AttachmentStatusResponse:
     return await services.attachments.retry(user.id, attachment_id)
+
+
+@router.get("/api/files/{attachment_id}/vision-debug", response_model=VisionDebugResponse)
+async def vision_debug(
+    attachment_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    services: Services = Depends(get_services),
+) -> VisionDebugResponse:
+    row = await services.attachments._row(user.id, attachment_id)
+    meta = row.get("extraction_metadata") or {}
+    visual_analysis = {
+        "visual_summary": meta.get("visual_summary", ""),
+        "plant_candidates": meta.get("plant_candidates", []),
+        "not_likely": meta.get("not_likely", []),
+        "limitations": meta.get("limitations", []),
+        "clarification_questions": meta.get("clarification_questions", []),
+    }
+    created_at = row.get("created_at")
+    created_at_str = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at) if created_at else None
+
+    return VisionDebugResponse(
+        attachment_id=attachment_id,
+        mime_type=row.get("mime_type", ""),
+        processing_status=row.get("processing_status", ""),
+        visual_analysis=visual_analysis,
+        vlm_called=meta.get("vlm_failed") is False or bool(meta.get("plant_candidates")),
+        vlm_model=services.settings.llama_vision_model_name,
+        last_processed_at=created_at_str,
+        content_hash=row.get("content_hash") or meta.get("image_sha256"),
+    )
+
+
+@router.post("/api/files/{attachment_id}/reprocess-vision", response_model=AttachmentStatusResponse)
+async def reprocess_vision(
+    attachment_id: str,
+    user: CurrentUser = Depends(get_current_user),
+    services: Services = Depends(get_services),
+) -> AttachmentStatusResponse:
+    return await services.attachments.reprocess_vision(user.id, attachment_id)
 
 
 @router.delete("/api/v1/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -341,7 +341,7 @@ class AgenticGraph:
                         refinement_prompt(),
                         f"PERTANYAAN ASLI:\n{state['user_query']}",
                         f"DRAFT:\n{draft_text}",
-                        f"FAKTA TERVERIFIKASI:\n{build_graph_context(state.get('retrieval', {}), state.get('attachment_context'), state.get('external_evidence'))}",
+                        f"FAKTA TERVERIFIKASI:\n{build_graph_context(state.get('retrieval', {}), state.get('attachment_context'), state.get('external_evidence'), intent=state.get('query_intent'))}",
                         f"STATUS GROUNDING: {state.get('grounding_status')}",
                     ]
                 ),
@@ -441,6 +441,7 @@ class AgenticGraph:
             state.get("retrieval", {}),
             state.get("attachment_context"),
             state.get("external_evidence"),
+            intent=state.get("query_intent"),
         )
         guidance = "\n".join(f"- {item}" for item in state.get("specialist_guidance", []))
         system = build_system_prompt(persona, mode)
@@ -448,7 +449,7 @@ class AgenticGraph:
             system += f"\n\nPANDUAN SPESIALIS:\n{guidance}"
         return [
             {"role": "system", "content": system},
-            {"role": "user", "content": graph_rag_prompt(context, state["user_query"])},
+            {"role": "user", "content": graph_rag_prompt(context, state["user_query"], intent=state.get("query_intent"))},
         ]
 
     @staticmethod

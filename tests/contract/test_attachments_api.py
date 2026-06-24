@@ -66,3 +66,14 @@ def test_attachment_upload_flow(client_with_auth):
     retry_resp = client.post(f"/api/files/{file_id}/retry")
     assert retry_resp.status_code == 200
     assert retry_resp.json()["processing_status"] in {"processing", "completed"}
+
+    # Test debug and reprocess endpoints
+    debug_resp = client.get(f"/api/files/{file_id}/vision-debug")
+    assert debug_resp.status_code == 200
+    debug_data = debug_resp.json()
+    assert debug_data["attachment_id"] == file_id
+    assert "visual_analysis" in debug_data
+
+    reprocess_resp = client.post(f"/api/files/{file_id}/reprocess-vision")
+    assert reprocess_resp.status_code == 200
+    assert reprocess_resp.json()["processing_status"] in {"processing", "completed"}

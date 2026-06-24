@@ -8,6 +8,7 @@ class GroundingValidatorAgent:
             state.get("draft_answer") or "",
             state.get("retrieval", {}),
             state.get("citations", []),
+            attachments=state.get("attachment_context"),
         )
         state["grounding_status"] = result["status"]
         state["confidence"] = result["confidence"]

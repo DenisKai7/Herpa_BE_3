@@ -12,3 +12,10 @@ def test_indonesian_informal_normalization():
     assert "senyawa aktif" in text
     assert "dalam" in text
     assert "apa saja" in text
+
+
+def test_image_identification_intent():
+    assert classify_query_intent("ini daun apa?") == QueryIntent.IMAGE_IDENTIFICATION
+    assert classify_query_intent("identifikasi gambar tanaman ini") == QueryIntent.IMAGE_IDENTIFICATION
+    assert classify_query_intent("manfaat daun apa ini") == QueryIntent.IMAGE_IDENTIFICATION
+

@@ -13,6 +13,7 @@ class QueryIntent(StrEnum):
     RESEARCH_ANALYSIS = "research-analysis"
     MEDICAL_SAFETY = "medical-safety"
     DOCUMENT_ANALYSIS = "document-analysis"
+    IMAGE_IDENTIFICATION = "image-identification"
     GENERAL = "general"
 
 
@@ -36,6 +37,8 @@ _NORMALIZATIONS: tuple[tuple[str, str], ...] = (
     ("manfaatnya", "manfaat"),
     ("khasiatnya", "khasiat"),
     ("nama latin", "nama ilmiah"),
+    ("tanaman apaan", "tanaman apa"),
+    ("ini tanaman apa", "tanaman apa"),
 )
 
 
@@ -62,6 +65,14 @@ def classify_intent(query: str) -> IntentResult:
 
 def classify_query_intent(query: str) -> QueryIntent:
     text = normalize_query_text(query)
+
+    if any(term in text for term in (
+        "tanaman apa", "apa tanaman", "identifikasi", "identifikasi tanaman",
+        "tanaman ini", "gambar ini", "foto ini", "daun apa", "bunga apa",
+        "tumbuhan apa", "ini apa", "jenis tanaman", "nama tanaman", "jenis daun",
+        "ini daun apa", "ini tanaman apa"
+    )):
+        return QueryIntent.IMAGE_IDENTIFICATION
 
     if any(term in text for term in ("file", "dokumen", "pdf", "lampiran", "attachment", "unggahan")):
         return QueryIntent.DOCUMENT_ANALYSIS

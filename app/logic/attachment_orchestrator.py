@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import asyncio
+import hashlib
 from typing import Any
 from uuid import uuid4
 
@@ -168,16 +169,52 @@ class AttachmentOrchestrator:
             try:
                 extracted = await self.image.analyze(data, row["mime_type"], query)
             except AppError as exc:
-                extracted = {"text": "", "needs_vision": True, "vision_error": str(exc.message)}
+                extracted = {"text": "", "needs_vision": True, "vision_error": str(exc.message), "vlm_failed": True}
             except Exception:
-                extracted = {"text": "", "needs_vision": True, "vision_error": "Model VLM lokal belum tersedia."}
+                extracted = {"text": "", "needs_vision": True, "vision_error": "Model VLM lokal belum tersedia.", "vlm_failed": True}
+
+        existing_meta = row.get("extraction_metadata") or {}
+        new_meta = dict(existing_meta)
+
+        # Merge extracted keys (excluding text)
+        for k, v in extracted.items():
+            if k != "text":
+                new_meta[k] = v
+
+        # Task 11: Populate visual_analysis nested dictionary
+        if extracted.get("needs_vision") or row["mime_type"].startswith("image/"):
+            from app.core.config import Settings
+            settings = Settings()
+            new_meta["visual_analysis"] = {
+                "source": "llama_cpp_vision",
+                "base_url": settings.llama_vision_base_url,
+                "model": settings.llama_vision_model_name,
+                "visual_summary": extracted.get("visual_summary", ""),
+                "morphology": extracted.get("morphology", {
+                    "leaf_type": "unknown",
+                    "arrangement": "unknown",
+                    "leaflet_count": "unknown",
+                    "leaflet_shape": "unknown",
+                    "confidence": 0.0
+                }),
+                "plant_candidates": extracted.get("plant_candidates", []),
+                "not_likely": extracted.get("not_likely", []),
+                "processed_at": self._now(),
+            }
+            # Keep flat keys for backwards compatibility
+            new_meta["plant_candidates"] = extracted.get("plant_candidates", [])
+            new_meta["visual_summary"] = extracted.get("visual_summary", "")
+            new_meta["not_likely"] = extracted.get("not_likely", [])
+            new_meta["limitations"] = extracted.get("limitations", [])
+            new_meta["vlm_failed"] = extracted.get("vlm_failed", False)
+            new_meta["morphology"] = extracted.get("morphology", {})
 
         update = {
             "processing_status": "completed",
             "verification_status": "extracted",
             "confidence": 0.8,
             "extracted_text": extracted.get("text", ""),
-            "extraction_metadata": {k: v for k, v in extracted.items() if k != "text"},
+            "extraction_metadata": new_meta,
         }
         row.update(update)
         if self.db.settings.allow_mock_services:
@@ -210,12 +247,27 @@ class AttachmentOrchestrator:
         row = matches[0]
         data = await self.storage.get(row["bucket"], row["object_key"])
         validate_upload(data, payload.filename, payload.content_type, self.settings)
+
+        sha256_hash = hashlib.sha256(data).hexdigest()
+        existing_meta = row.get("extraction_metadata") or {}
+        new_meta = dict(existing_meta)
+        if row["mime_type"].startswith("image/"):
+            new_meta["image_sha256"] = sha256_hash
+        row["extraction_metadata"] = new_meta
+
+        if not self.db.settings.allow_mock_services:
+            await self.db.update(
+                "attachments",
+                {"id": f"eq.{row['id']}", "user_id": f"eq.{user_id}"},
+                {"extraction_metadata": new_meta}
+            )
+
         await self._update_status(row["id"], user_id, "processing")
-        asyncio.create_task(self._process_safe(row, data, "Analisis attachment ini"))
+        asyncio.create_task(self._process_safe(row, data, ""))
         return await self.status(user_id, row["id"])
 
     async def upload(
-        self, user_id: str, file: UploadFile, query: str = "Analisis attachment ini"
+        self, user_id: str, file: UploadFile, query: str = ""
     ) -> FileUploadResponse:
         data = await file.read()
         filename = safe_filename(file.filename or "file")
@@ -225,6 +277,11 @@ class AttachmentOrchestrator:
         aid = str(uuid4())
         bucket = self.settings.minio_attachment_bucket
         await self.storage.put(bucket, key, data, mime)
+        sha256_hash = hashlib.sha256(data).hexdigest()
+        extraction_metadata = {}
+        if mime.startswith("image/"):
+            extraction_metadata["image_sha256"] = sha256_hash
+
         record = {
             "id": aid,
             "user_id": user_id,
@@ -237,6 +294,7 @@ class AttachmentOrchestrator:
             "verification_status": "pending",
             "confidence": 0.0,
             "created_at": self._now(),
+            "extraction_metadata": extraction_metadata,
         }
         await self._save_record(record)
         asyncio.create_task(self._process_safe(record, data, query))
@@ -289,7 +347,35 @@ class AttachmentOrchestrator:
             return await self.status(user_id, attachment_id)
         await self._update_status(attachment_id, user_id, "processing")
         data = await self.storage.get(row["bucket"], row["object_key"])
-        asyncio.create_task(self._process_safe(row, data, "Analisis attachment ini"))
+        asyncio.create_task(self._process_safe(row, data, ""))
+        return await self.status(user_id, attachment_id)
+
+    async def reprocess_vision(self, user_id: str, attachment_id: str) -> AttachmentStatusResponse:
+        row = await self._row(user_id, attachment_id)
+        meta = dict(row.get("extraction_metadata") or {})
+        for key in ["plant_candidates", "visual_summary", "not_likely", "limitations", "clarification_questions", "vlm_failed", "error", "vision_error"]:
+            meta.pop(key, None)
+
+        row["extraction_metadata"] = meta
+        row["extracted_text"] = ""
+        row["processing_status"] = "processing"
+
+        if not self.db.settings.allow_mock_services:
+            await self.db.update(
+                "attachments",
+                {"id": f"eq.{attachment_id}", "user_id": f"eq.{user_id}"},
+                {"extraction_metadata": meta, "extracted_text": "", "processing_status": "processing"}
+            )
+        else:
+            if attachment_id in self._mock:
+                self._mock[attachment_id].update({
+                    "extraction_metadata": meta,
+                    "extracted_text": "",
+                    "processing_status": "processing"
+                })
+
+        data = await self.storage.get(row["bucket"], row["object_key"])
+        asyncio.create_task(self._process_safe(row, data, ""))
         return await self.status(user_id, attachment_id)
 
     async def delete(self, user_id: str, attachment_id: str) -> None:
@@ -312,13 +398,27 @@ class AttachmentOrchestrator:
     async def context(self, user_id: str, ids: list[str]) -> list[dict[str, Any]]:
         contexts = []
         for attachment_id in ids:
-            result = await self.status(user_id, attachment_id)
-            if result.processing_status == "completed":
-                contexts.append(
-                    {
-                        "attachment_id": attachment_id,
-                        "text": result.extracted_text,
-                        "detected_type": result.detected_type,
-                    }
-                )
+            row = await self._row(user_id, attachment_id)
+            if row.get("processing_status") != "completed":
+                continue
+            meta = row.get("extraction_metadata") or {}
+            entry = {
+                "attachment_id": attachment_id,
+                "text": row.get("extracted_text", ""),
+                "detected_type": row.get("mime_type"),
+                "filename": row.get("filename"),
+                "size_bytes": row.get("size_bytes", 0),
+                "vlm_failed": meta.get("vlm_failed", False),
+            }
+            if meta.get("image_sha256"):
+                entry["image_sha256"] = meta["image_sha256"]
+            if meta.get("plant_candidates"):
+                entry["plant_candidates"] = meta["plant_candidates"]
+            if meta.get("visual_summary"):
+                entry["visual_summary"] = meta["visual_summary"]
+            if meta.get("not_likely"):
+                entry["not_likely"] = meta["not_likely"]
+            if meta.get("limitations"):
+                entry["vlm_limitations"] = meta["limitations"]
+            contexts.append(entry)
         return contexts
