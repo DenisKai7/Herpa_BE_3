@@ -254,7 +254,65 @@ class AdminService:
                 }
             )
         except Exception:
-            return fallback
+            events = []
+
+        # Fallback to chat_messages if no events in model_usage_events
+        if not events:
+            try:
+                messages = await self.client.select(
+                    "chat_messages",
+                    {
+                        "select": "id,chat_id,role,model_name,token_input,token_output,latency_ms,metadata,created_at",
+                        "role": "in.(ai,assistant)",
+                        "order": "created_at.desc",
+                        "limit": "1000"
+                    }
+                )
+
+                # Fetch chats to map persona_snapshot
+                chats_list = await self.client.select(
+                    "chats",
+                    {
+                        "select": "id,persona_snapshot",
+                        "limit": "1000"
+                    }
+                )
+                chat_personas = {c["id"]: c.get("persona_snapshot", "umum") for c in chats_list if "id" in c}
+
+                events = []
+                for msg in messages:
+                    meta = msg.get("metadata") or {}
+
+                    # Extract model name
+                    model_name = msg.get("model_name") or meta.get("model") or meta.get("model_choice") or meta.get("model_mode") or meta.get("mode") or "umum"
+
+                    # Extract token counts
+                    input_tokens = msg.get("token_input") or meta.get("usage", {}).get("prompt_tokens") or 0
+                    output_tokens = msg.get("token_output") or meta.get("usage", {}).get("completion_tokens") or 0
+
+                    # Extract latency
+                    latency_ms = msg.get("latency_ms") or meta.get("latency") or meta.get("latency_ms") or 0
+
+                    # Success and error mapping
+                    error_code = meta.get("error_code")
+                    success = not bool(error_code)
+
+                    # Persona
+                    persona = chat_personas.get(msg.get("chat_id"), "umum")
+
+                    events.append({
+                        "model_name": model_name,
+                        "input_tokens": input_tokens,
+                        "output_tokens": output_tokens,
+                        "latency_ms": latency_ms,
+                        "success": success,
+                        "error_code": error_code,
+                        "created_at": msg.get("created_at"),
+                        "persona": persona
+                    })
+            except Exception as e:
+                logger.warning(f"Failed to query chat_messages for fallback AI usage: {str(e)}")
+                return fallback
 
         if not events:
             return fallback
@@ -268,24 +326,25 @@ class AdminService:
         total_completion_tokens = sum(e.get("output_tokens") or 0 for e in events)
         total_tokens = total_prompt_tokens + total_completion_tokens
 
-        # Group by model
+        # Group by (model, persona) for entries table
         groups = {}
         for e in events:
             m_name = e.get("model_name", "unknown")
-            if m_name not in groups:
-                groups[m_name] = {"requests": 0, "latency": 0, "tokens": 0, "errors": 0}
-            groups[m_name]["requests"] += 1
-            groups[m_name]["latency"] += e.get("latency_ms") or 0
-            groups[m_name]["tokens"] += (e.get("input_tokens") or 0) + (e.get("output_tokens") or 0)
+            persona = e.get("persona", "umum")
+            key = (m_name, persona)
+            if key not in groups:
+                groups[key] = {"requests": 0, "latency": 0, "tokens": 0, "errors": 0}
+            groups[key]["requests"] += 1
+            groups[key]["latency"] += e.get("latency_ms") or 0
+            groups[key]["tokens"] += (e.get("input_tokens") or 0) + (e.get("output_tokens") or 0)
             if not e.get("success", True):
-                groups[m_name]["errors"] += 1
+                groups[key]["errors"] += 1
 
         entries = []
-        by_model = []
-        for m_name, g in groups.items():
+        for (m_name, persona), g in groups.items():
             entry = {
                 "model_mode": m_name,
-                "persona": "umum",
+                "persona": persona,
                 "request_count": g["requests"],
                 "avg_latency_ms": g["latency"] / g["requests"] if g["requests"] > 0 else 0.0,
                 "total_tokens": g["tokens"],
@@ -293,11 +352,25 @@ class AdminService:
                 "date": datetime.now(timezone.utc).date().isoformat()
             }
             entries.append(entry)
+
+        # Group by model_name for by_model (frontend chart/summary)
+        model_groups = {}
+        for e in events:
+            m_name = e.get("model_name", "unknown")
+            if m_name not in model_groups:
+                model_groups[m_name] = {"requests": 0, "tokens": 0, "errors": 0}
+            model_groups[m_name]["requests"] += 1
+            model_groups[m_name]["tokens"] += (e.get("input_tokens") or 0) + (e.get("output_tokens") or 0)
+            if not e.get("success", True):
+                model_groups[m_name]["errors"] += 1
+
+        by_model = []
+        for m_name, mg in model_groups.items():
             by_model.append({
                 "model_name": m_name,
-                "requests": g["requests"],
-                "tokens": g["tokens"],
-                "errors": g["errors"]
+                "requests": mg["requests"],
+                "tokens": mg["tokens"],
+                "errors": mg["errors"]
             })
 
         # Count text vs vision requests based on model name configuration
@@ -704,7 +777,12 @@ class AdminService:
         """Fetch file storage usage and bucket statistics."""
         fallback = {
             "status": "unavailable",
-            "buckets": [],
+            "buckets": [
+                {"name": "Profile Images", "files": 0, "object_count": 0, "size_bytes": 0},
+                {"name": "Chat Attachments", "files": 0, "object_count": 0, "size_bytes": 0},
+                {"name": "Generated Exports", "files": 0, "object_count": 0, "size_bytes": 0},
+                {"name": "Processing Temp", "files": 0, "object_count": 0, "size_bytes": 0}
+            ],
             "total_size_bytes": 0,
             "failed_uploads": 0,
             "summary": {
@@ -713,7 +791,8 @@ class AdminService:
                 "total_attachments": 0,
                 "image_files": 0,
                 "document_files": 0,
-                "failed_processing": 0
+                "failed_processing": 0,
+                "minio_status": "unavailable"
             },
             "by_mime_type": [],
             "recent_files": []
@@ -724,16 +803,21 @@ class AdminService:
 
         try:
             objects = await self.client.select("storage_objects", {
-                "select": "*",
+                "select": "id,bucket,object_key,size_bytes,object_type,created_at",
+                "deleted_at": "is.null",
                 "order": "created_at.desc",
                 "limit": "1000"
             })
-            attachments = await self.client.select("attachments", {
-                "select": "id,file_type,status",
-                "limit": "500"
-            })
         except Exception:
             objects = []
+
+        try:
+            attachments = await self.client.select("attachments", {
+                "select": "id,user_id,bucket,object_key,filename,mime_type,size_bytes,processing_status,created_at",
+                "deleted_at": "is.null",
+                "limit": "1000"
+            })
+        except Exception:
             attachments = []
 
         # Determine bucket health
@@ -743,11 +827,26 @@ class AdminService:
         except Exception:
             pass
 
-        buckets_dict = {
-            "profile-images": {"name": "profile-images", "object_count": 0, "size_bytes": 0},
-            "chat-attachments": {"name": "chat-attachments", "object_count": 0, "size_bytes": 0},
-            "generated-exports": {"name": "generated-exports", "object_count": 0, "size_bytes": 0},
-            "processing-temp": {"name": "processing-temp", "object_count": 0, "size_bytes": 0},
+        minio_status = "running" if minio_healthy else "unavailable"
+
+        # Bucket mapping categories
+        def get_bucket_category(bucket_name: str) -> str:
+            bn = str(bucket_name).lower()
+            if bn in ("profile-images", "profile", "avatar", "profile_images"):
+                return "Profile Images"
+            if bn in ("chat-attachments", "attachments", "uploads"):
+                return "Chat Attachments"
+            if bn in ("generated-exports", "exports", "generated_exports"):
+                return "Generated Exports"
+            if bn in ("processing-temp", "temp", "processing_temp"):
+                return "Processing Temp"
+            return "Chat Attachments"
+
+        category_stats = {
+            "Profile Images": {"files": 0, "size_bytes": 0},
+            "Chat Attachments": {"files": 0, "size_bytes": 0},
+            "Generated Exports": {"files": 0, "size_bytes": 0},
+            "Processing Temp": {"files": 0, "size_bytes": 0},
         }
 
         total_size = 0
@@ -755,48 +854,118 @@ class AdminService:
         document_files = 0
         by_mime = {}
 
-        for obj in objects:
-            b_name = obj.get("bucket", "unknown")
-            size = obj.get("size_bytes") or 0
-            mime = obj.get("object_type", "unknown")
+        # If storage_objects is empty, fall back to attachments
+        use_attachments_for_stats = len(objects) == 0
 
-            if b_name not in buckets_dict:
-                buckets_dict[b_name] = {"name": b_name, "object_count": 0, "size_bytes": 0}
+        if use_attachments_for_stats:
+            for att in attachments:
+                cat = get_bucket_category(att.get("bucket", "chat-attachments"))
+                size = att.get("size_bytes") or 0
+                mime = att.get("mime_type") or "application/octet-stream"
 
-            buckets_dict[b_name]["object_count"] += 1
-            buckets_dict[b_name]["size_bytes"] += size
-            total_size += size
+                category_stats[cat]["files"] += 1
+                category_stats[cat]["size_bytes"] += size
+                total_size += size
 
-            by_mime[mime] = by_mime.get(mime, 0) + size
+                by_mime[mime] = by_mime.get(mime, 0) + size
+                if "image" in mime:
+                    image_files += 1
+                else:
+                    document_files += 1
+        else:
+            # Map attachments by object_key to help with size/mime fallback
+            att_by_key = {att.get("object_key"): att for att in attachments if att.get("object_key")}
 
-            if "image" in mime:
-                image_files += 1
-            else:
-                document_files += 1
+            for obj in objects:
+                cat = get_bucket_category(obj.get("bucket", "chat-attachments"))
 
-        failed_uploads = sum(1 for att in attachments if att.get("status") == "failed")
+                # size with fallback
+                size = obj.get("size_bytes")
+                key = obj.get("object_key")
+                att = att_by_key.get(key) if key else None
+
+                if size is None and att:
+                    size = att.get("size_bytes")
+                size = size or 0
+
+                # mime mapping
+                mime = "unknown"
+                if att:
+                    mime = att.get("mime_type") or "unknown"
+                else:
+                    obj_type = obj.get("object_type", "")
+                    if obj_type == "avatar":
+                        mime = "image/png"
+                    elif obj_type == "attachment":
+                        mime = "application/octet-stream"
+                    else:
+                        mime = obj_type or "unknown"
+
+                category_stats[cat]["files"] += 1
+                category_stats[cat]["size_bytes"] += size
+                total_size += size
+
+                by_mime[mime] = by_mime.get(mime, 0) + size
+                if "image" in mime:
+                    image_files += 1
+                else:
+                    document_files += 1
+
+        failed_uploads = sum(1 for att in attachments if att.get("processing_status") == "failed")
+
+        buckets_list = []
+        for cat_name, stats in category_stats.items():
+            buckets_list.append({
+                "name": cat_name,
+                "files": stats["files"],
+                "object_count": stats["files"],  # For frontend
+                "size_bytes": stats["size_bytes"]
+            })
+
+        recent_files = []
+        # Use objects or attachments for recent list
+        if not use_attachments_for_stats:
+            for obj in objects[:15]:
+                key = obj.get("object_key")
+                att = att_by_key.get(key) if key else None
+                name = att.get("filename") if att else key.split("/")[-1] if key else "unknown"
+                recent_files.append({
+                    "id": str(obj.get("id")),
+                    "bucket": obj.get("bucket"),
+                    "object_key": key,
+                    "filename": name,
+                    "size_bytes": obj.get("size_bytes") or (att.get("size_bytes") if att else 0),
+                    "created_at": obj.get("created_at")
+                })
+        else:
+            for att in attachments[:15]:
+                recent_files.append({
+                    "id": str(att.get("id")),
+                    "bucket": att.get("bucket"),
+                    "object_key": att.get("object_key"),
+                    "filename": att.get("filename"),
+                    "size_bytes": att.get("size_bytes") or 0,
+                    "created_at": att.get("created_at")
+                })
+
+        summary = {
+            "total_files": len(objects) if not use_attachments_for_stats else len(attachments),
+            "total_size_bytes": total_size,
+            "total_attachments": len(attachments),
+            "image_files": image_files,
+            "document_files": document_files,
+            "failed_processing": failed_uploads,
+            "minio_status": minio_status
+        }
 
         return {
             "status": "ok" if minio_healthy else "down",
-            "buckets": list(buckets_dict.values()),
+            "buckets": buckets_list,
             "total_size_bytes": total_size,
             "failed_uploads": failed_uploads,
-            "summary": {
-                "total_files": len(objects),
-                "total_size_bytes": total_size,
-                "total_attachments": len(attachments),
-                "image_files": image_files,
-                "document_files": document_files,
-                "failed_processing": failed_uploads
-            },
+            "summary": summary,
             "by_mime_type": [{"mime_type": k, "size_bytes": v} for k, v in by_mime.items()],
-            "recent_files": [{
-                "id": str(obj.get("id")),
-                "bucket": obj.get("bucket"),
-                "object_key": obj.get("object_key"),
-                "size_bytes": obj.get("size_bytes"),
-                "created_at": obj.get("created_at")
-            } for obj in objects[:15]]
+            "recent_files": recent_files
         }
 
     async def get_recent_errors(self, limit: int = 50, unresolved_only: bool = False) -> dict[str, Any]:
