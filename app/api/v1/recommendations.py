@@ -28,11 +28,18 @@ async def analyze(
 @router.get("/api/v1/recommendations/herbs/{herb_id}/detail", include_in_schema=False)
 async def get_herb_recommendation_detail(
     herb_id: str,
+    common_name: str | None = None,
+    scientific_name: str | None = None,
     user: CurrentUser = Depends(get_current_user),
     services: Services = Depends(get_services),
 ):
     logger.info("herbal_detail_stage", extra={"stage": "detail_request_received", "herb_id": herb_id})
-    detail = await services.recommendation_orchestrator.get_herb_recommendation_detail(herb_id, persona="umum")
+    detail = await services.recommendation_orchestrator.get_herb_recommendation_detail(
+        herb_id,
+        persona="umum",
+        common_name=common_name,
+        scientific_name=scientific_name,
+    )
     return json_safe(
         {
             "status": "completed",

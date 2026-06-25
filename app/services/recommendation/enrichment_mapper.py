@@ -33,6 +33,27 @@ def empty_enrichment() -> dict[str, list[Any]]:
     return {key: [] for key in ENRICHMENT_KEYS}
 
 
+def dedupe_by_key(items: list[dict] | None, keys: list[str]) -> list[dict]:
+    """Deduplicate dicts by composite key derived from given field names."""
+    seen: set[str] = set()
+    result: list[dict] = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        key_parts = []
+        for key in keys:
+            value = str(item.get(key) or "").strip().lower()
+            key_parts.append(value)
+        dedupe_key = "|".join(key_parts)
+        if not dedupe_key.strip("|"):
+            continue
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        result.append(item)
+    return result
+
+
 def remove_empty_items(
     items: list[dict] | None,
     required_keys: tuple[str, ...] = ("id", "title", "name", "description"),
@@ -121,28 +142,49 @@ def map_enrichment_row(row: dict) -> dict:
         item.setdefault("severity", "caution")
         item.setdefault("verification_status", "limited")
 
+    # Deduplicate all collections by semantic key
+    traditional_uses = dedupe_by_key(traditional_uses, ["id", "title", "description"])
+    preparation_methods = dedupe_by_key(preparation_methods, ["id", "title", "method_type", "plant_part"])
+    usage_guidelines = dedupe_by_key(usage_guidelines, ["id", "title", "description", "frequency_text"])
+    safety_warnings = dedupe_by_key(safety_warnings, ["id", "title", "description", "severity"])
+    claims = dedupe_by_key(claims, ["claim_id", "claim_text"])
+    plant_parts = dedupe_by_key(remove_empty_items(row.get("plant_parts"), ("id", "name")), ["id", "name"])
+    storage_guidelines = dedupe_by_key(remove_empty_items(row.get("storage_guidelines"), ("id", "title", "description")), ["id", "title"])
+    myth_facts = dedupe_by_key(remove_empty_items(row.get("myth_facts"), ("id", "claim", "fact")), ["id", "claim"])
+    quality_standards = dedupe_by_key(remove_empty_items(row.get("quality_standards"), ("id", "parameter", "value")), ["id", "parameter"])
+    clinical_guidelines = dedupe_by_key(clinical_guidelines, ["id", "mechanism"])
+    drug_interactions = dedupe_by_key(
+        remove_empty_items(row.get("drug_interactions"), ("id", "substance", "description")), ["id", "substance"]
+    )
+    contraindications = dedupe_by_key(
+        remove_empty_items(row.get("contraindications"), ("id", "condition", "description")), ["id", "condition"]
+    )
+    pharmacokinetic_profiles = remove_empty_items(
+        row.get("pharmacokinetic_profiles"), ("absorption", "distribution", "metabolism", "excretion")
+    )
+    research_topics = dedupe_by_key(
+        _merge_list_field(remove_empty_items(row.get("research_topics"), ("id", "title")), "visible_to"), ["id", "title"]
+    )
+    related_symptoms = dedupe_by_key(
+        _merge_list_field(remove_empty_items(row.get("related_symptoms"), ("id", "name")), "aliases"), ["id", "name"]
+    )
+
     mapped = {
         "traditional_uses": traditional_uses,
         "preparation_methods": _merge_list_field(preparation_methods, "formulations"),
         "usage_guidelines": usage_guidelines,
         "safety_warnings": _merge_list_field(safety_warnings, "population_risks"),
-        "plant_parts": remove_empty_items(row.get("plant_parts"), ("id", "name")),
-        "storage_guidelines": remove_empty_items(row.get("storage_guidelines"), ("id", "title", "description")),
-        "myth_facts": remove_empty_items(row.get("myth_facts"), ("id", "claim", "fact")),
-        "quality_standards": remove_empty_items(row.get("quality_standards"), ("id", "parameter", "value")),
+        "plant_parts": plant_parts,
+        "storage_guidelines": storage_guidelines,
+        "myth_facts": myth_facts,
+        "quality_standards": quality_standards,
         "clinical_guidelines": _merge_list_field(clinical_guidelines, "visible_to"),
-        "drug_interactions": _merge_list_field(
-            remove_empty_items(row.get("drug_interactions"), ("id", "substance", "description")), "population_risks"
-        ),
-        "contraindications": _merge_list_field(
-            remove_empty_items(row.get("contraindications"), ("id", "condition", "description")), "population_risks"
-        ),
-        "pharmacokinetic_profiles": remove_empty_items(
-            row.get("pharmacokinetic_profiles"), ("absorption", "distribution", "metabolism", "excretion")
-        ),
-        "research_topics": _merge_list_field(remove_empty_items(row.get("research_topics"), ("id", "title")), "visible_to"),
+        "drug_interactions": _merge_list_field(drug_interactions, "population_risks"),
+        "contraindications": _merge_list_field(contraindications, "population_risks"),
+        "pharmacokinetic_profiles": pharmacokinetic_profiles,
+        "research_topics": research_topics,
         "claims": claims,
-        "related_symptoms": _merge_list_field(remove_empty_items(row.get("related_symptoms"), ("id", "name")), "aliases"),
+        "related_symptoms": related_symptoms,
     }
     return json_safe(mapped)
 

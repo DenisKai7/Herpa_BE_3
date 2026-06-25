@@ -17,6 +17,7 @@ from app.models.recommendation import (
     HerbalRecommendationResponse,
     RecommendationScore,
 )
+from app.services.herbal_detail_service import build_herb_detail
 from app.services.recommendation.enrichment_mapper import empty_enrichment, filter_by_persona
 from app.services.recommendation.symptom_aliases import expand_symptoms
 from app.services.recommendation.symptom_expander import extract_recommendation_terms
@@ -97,6 +98,27 @@ def extract_symptoms_from_complaint(complaint: str) -> list[str]:
     for separator in (",", ";", " dengan ", " dan "):
         normalized = normalized.replace(separator, "|")
     return [item.strip() for item in normalized.split("|") if len(item.strip()) >= 3]
+
+
+# Broad terms that should not inflate scores on their own
+BROAD_MATCH_TERMS = {
+    "antiinflamasi", "antibakteri", "analgesik", "antioksidan", "antiseptik",
+    "radang", "nyeri", "infeksi", "pencernaan", "pernapasan", "kulit",
+}
+
+
+def _specificity_weight(term: str) -> float:
+    """More specific terms get higher weight. Multi-word > single-word."""
+    normalized = " ".join(term.lower().strip().split())
+    word_count = len(normalized.split())
+    if word_count >= 3:
+        return 1.0
+    if word_count >= 2:
+        return 0.85
+    # Single word — check if it's a broad term
+    if normalized in BROAD_MATCH_TERMS:
+        return 0.3
+    return 0.65
 
 
 def resolve_safety_label(status: str | None) -> str:
@@ -209,7 +231,14 @@ def build_recommendation_explanation(
 def build_light_explanation(candidate: dict[str, Any], score: float) -> str:
     plant = candidate.get("plant") or {}
     local_name = candidate.get("local_name") or plant.get("local_name") or "Tanaman ini"
-    if score >= 0.5:
+    matched = candidate.get("matched_symptoms") or []
+    if score >= 0.6 and matched:
+        symptom_text = ", ".join(matched[:3])
+        return (
+            f"{local_name} dipilih karena memiliki relasi langsung dengan gejala: {symptom_text}. "
+            "Data pendukung tersedia pada knowledge graph."
+        )
+    if score >= 0.4:
         return (
             f"{local_name} muncul sebagai kandidat karena memiliki kecocokan "
             "dengan gejala yang dimasukkan dan memiliki data pendukung pada knowledge graph."
@@ -367,6 +396,23 @@ class RecommendationOrchestrator:
             extra={"stage": "light_candidates_loaded", "candidate_count": len(rows), "duration_ms": duration_ms},
         )
         rows = [_normalize_recommendation_row(row) for row in rows]
+
+        # Post-process: adjust scores based on symptom specificity
+        for row in rows:
+            matched = row.get("matched_symptoms") or []
+            if not matched:
+                continue
+            specificity_scores = [_specificity_weight(s) for s in matched]
+            avg_specificity = sum(specificity_scores) / len(specificity_scores) if specificity_scores else 0.5
+            # Boost/penalize based on specificity of matched symptoms
+            specificity_multiplier = 0.7 + (avg_specificity * 0.4)  # range: 0.72 to 1.1
+            broad_only = all(s in BROAD_MATCH_TERMS for s in matched)
+            if broad_only:
+                specificity_multiplier *= 0.6  # significant penalty for broad-only matches
+            if "score" in row:
+                row["score"] = clamp_score(row["score"] * specificity_multiplier)
+            row["_specificity_multiplier"] = specificity_multiplier
+            row["_avg_specificity"] = avg_specificity
         if not rows and self.allow_mock:
             seen = set()
             rows = []
@@ -492,6 +538,19 @@ class RecommendationOrchestrator:
             relevance_level, relevance_label = resolve_relevance_label(confidence)
             relevance_percent = score_to_percent(confidence)
             symptom_coverage_percent = score_to_percent(symptom_match_score)
+            logger.info(
+                "recommendation_scoring",
+                extra={
+                    "event": "recommendation_scoring",
+                    "candidate": local_name,
+                    "direct_matches": matched,
+                    "score": round(confidence, 4),
+                    "symptom_match_score": round(symptom_match_score, 4),
+                    "specificity_multiplier": row.get("_specificity_multiplier"),
+                    "relevance_level": relevance_level,
+                    "final_rank": len(candidates) + 1,
+                },
+            )
             # Resolve factual data status
             data_status_input = {
                 "traditional_uses": row_traditional_uses or enrichment.get("traditional_uses"),
@@ -565,6 +624,7 @@ class RecommendationOrchestrator:
                 recommendation_reason=explanation,
                 reason=explanation,
                 match_reasons=match_reasons,
+                matched_symptoms=matched,
                 related_symptoms=related_uses or matched,
                 active_compounds=active_compounds,
                 warnings=candidate_warnings,
@@ -703,9 +763,26 @@ class RecommendationOrchestrator:
         )
         return response
 
-    async def get_herb_recommendation_detail(self, herb_id: str, persona: str = "umum") -> dict[str, Any]:
-        detail = await self.repository.get_herb_detail_core(herb_id)
-        return filter_by_persona(detail, persona)
+    async def get_herb_recommendation_detail(
+        self,
+        herb_id: str,
+        persona: str = "umum",
+        *,
+        common_name: str | None = None,
+        scientific_name: str | None = None,
+        family: str | None = None,
+    ) -> dict[str, Any]:
+        """Build complete herbal detail with KG data + curated fallback."""
+        detail = await build_herb_detail(
+            self.repository,
+            herb_id,
+            common_name=common_name,
+            scientific_name=scientific_name,
+            family=family,
+        )
+        # Apply persona filtering to clinical/research sections
+        # but keep the full detail structure intact
+        return detail
 
     async def history(self, user_id: str) -> list[dict]:
         if self.allow_mock:

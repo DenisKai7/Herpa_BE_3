@@ -331,6 +331,7 @@ class HerbalCandidate(BaseModel):
     recommendation_reason: str = ""
     reason: str = ""
     match_reasons: list[str] = Field(default_factory=list)
+    matched_symptoms: list[str] = Field(default_factory=list)
     related_symptoms: list[str] = Field(default_factory=list)
     active_compounds: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
