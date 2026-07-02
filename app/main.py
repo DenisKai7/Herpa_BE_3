@@ -73,6 +73,10 @@ async def request_validation_exception_handler(request: Request, exc: RequestVal
 
 app.include_router(router)
 
+from app.evaluation.router import router as evaluation_router
+
+app.include_router(evaluation_router)
+
 
 @app.get("/")
 async def root() -> dict[str, str]:
