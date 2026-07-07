@@ -9,15 +9,17 @@ from app.agents.state import AgentState
 from app.core.exceptions import AppError
 from app.core.model_modes import normalize_model_mode, normalize_persona
 from app.models.chat import ChatMessageRequest, ChatResponse
+from app.services.analytics.ai_usage_logger import AIUsageLogger
 from app.services.supabase.chat_service import ChatService
 
 logger = logging.getLogger(__name__)
 
 
 class ChatOrchestrator:
-    def __init__(self, chats: ChatService, agent_graph: AgenticGraph) -> None:
+    def __init__(self, chats: ChatService, agent_graph: AgenticGraph, ai_usage_logger: AIUsageLogger | None = None) -> None:
         self.chats = chats
         self.agent_graph = agent_graph
+        self.ai_usage_logger = ai_usage_logger
 
     async def process(
         self,
@@ -141,6 +143,25 @@ class ChatOrchestrator:
                 warnings=state.get("warnings", []),
                 latency_ms=state.get("latency_ms"),
             )
+
+            # Log AI usage
+            if self.ai_usage_logger:
+                usage = state.get("usage", {})
+                await self.ai_usage_logger.log(
+                    user_id=user_id,
+                    model=model_mode.value,
+                    latency_ms=state.get("latency_ms") or timings.get("total_ms", 0),
+                    input_tokens=usage.get("prompt_tokens", 0),
+                    output_tokens=usage.get("completion_tokens", 0),
+                    status="success",
+                    persona=persona.value,
+                    endpoint="/chat",
+                    provider="local",
+                    prompt_text=payload.message,
+                    response_text=state.get("grounded_answer", "")[:500],
+                    request_id=request_id,
+                )
+
             return response
         except AppError as exc:
             exc.details.setdefault("stage", exc.details.get("stage") or stage)
@@ -160,6 +181,23 @@ class ChatOrchestrator:
                     "error_code": exc.code,
                 },
             )
+
+            # Log failed AI usage
+            if self.ai_usage_logger:
+                elapsed = int((time.perf_counter() - started_all) * 1000)
+                await self.ai_usage_logger.log(
+                    user_id=user_id,
+                    model=model_mode.value,
+                    latency_ms=elapsed,
+                    status="error",
+                    error_code=exc.code,
+                    persona=persona.value,
+                    endpoint="/chat",
+                    provider="local",
+                    prompt_text=payload.message,
+                    request_id=request_id,
+                )
+
             raise
 
     async def stream(

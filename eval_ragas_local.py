@@ -74,7 +74,7 @@ local_llm = ChatOpenAI(
     model=LLAMA_MODEL,
     temperature=0.1,
     max_tokens=512,
-    request_timeout=600,  # generous timeout for local inference
+    request_timeout=900,  # generous timeout for local inference
 )
 
 # ---------------------------------------------------------------------------

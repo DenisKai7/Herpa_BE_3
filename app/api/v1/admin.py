@@ -1,9 +1,20 @@
 import logging
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.dependencies.roles import require_admin
 from app.api.dependencies.services import Services, get_services
-from app.models.admin import AdminAnalytics, UpdateUserRoleRequest, UpdateUserStatusRequest
+from app.core.constants import AccountStatus, ApplicationRole
+from app.core.exceptions import AppError, ForbiddenError
+from app.models.admin import (
+    AdminAnalytics,
+    CreateUserRequest,
+    DeleteUserRequest,
+    UpdateUserRoleRequest,
+    UpdateUserRequest,
+    UpdateUserStatusRequest,
+)
 from app.models.auth import CurrentUser
 
 logger = logging.getLogger(__name__)
@@ -21,12 +32,26 @@ async def analytics(
 @router.get("/api/admin/users")
 @router.get("/api/v1/admin/users", include_in_schema=False)
 async def users(
-    limit: int = Query(100, ge=1, le=200),
+    limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    search: str | None = Query(None, max_length=100),
+    role: ApplicationRole | None = Query(None),
+    status: AccountStatus | None = Query(None),
+    sort: Literal["full_name", "email", "created_at"] = Query("created_at"),
+    sort_dir: Literal["asc", "desc"] = Query("desc"),
     admin: CurrentUser = Depends(require_admin),
     services: Services = Depends(get_services),
 ):
-    return await services.admin.users(limit, offset)
+    rows, total = await services.admin.users(
+        limit=limit,
+        offset=offset,
+        search=search,
+        role=role.value if role else None,
+        status=status.value if status else None,
+        sort=sort,
+        sort_dir=sort_dir,
+    )
+    return {"users": rows, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/api/v1/admin/users/{user_id}")
@@ -86,6 +111,120 @@ async def update_status(
         request.state.request_id,
     )
     return profile
+
+
+# ── CRUD User Endpoints ──
+
+
+@router.post("/api/admin/users", status_code=201)
+async def create_user(
+    payload: CreateUserRequest,
+    request: Request,
+    admin: CurrentUser = Depends(require_admin),
+    services: Services = Depends(get_services),
+):
+    auth_user = await services.auth.admin_create_user(payload.email, payload.password)
+    user_id = auth_user["id"]
+    profile = await services.admin.create_user_profile(
+        user_id=user_id,
+        email=payload.email,
+        full_name=payload.full_name,
+        role=payload.role.value,
+        instansi=payload.instansi,
+    )
+    await services.admin.audit(
+        admin.id, "user.created", "profile", user_id,
+        None, {"email": payload.email, "full_name": payload.full_name, "role": payload.role.value},
+        request.state.request_id,
+    )
+    return profile
+
+
+@router.patch("/api/admin/users/{user_id}")
+async def update_user(
+    user_id: str,
+    payload: UpdateUserRequest,
+    request: Request,
+    admin: CurrentUser = Depends(require_admin),
+    services: Services = Depends(get_services),
+):
+    # Self-demotion guard
+    if payload.role is not None and user_id == admin.id and payload.role != ApplicationRole.ADMIN:
+        raise ForbiddenError("Tidak dapat menurunkan role akun sendiri.")
+
+    # Self-status guard
+    if payload.account_status is not None and user_id == admin.id:
+        raise ForbiddenError("Tidak dapat mengubah status akun sendiri.")
+
+    before = await services.admin.user(user_id) if not services.settings.allow_mock_services else None
+
+    update_data: dict = {}
+    if payload.full_name is not None:
+        update_data["full_name"] = payload.full_name
+    if payload.instansi is not None:
+        update_data["instansi"] = payload.instansi
+    if payload.role is not None:
+        update_data["application_role"] = payload.role.value
+    if payload.account_status is not None:
+        update_data["account_status"] = payload.account_status.value
+
+    if not update_data:
+        raise AppError("VALIDATION_ERROR", "Tidak ada field yang diubah.", 400)
+
+    result = await services.admin.update_user(user_id, update_data)
+    await services.admin.audit(
+        admin.id, "user.updated", "profile", user_id,
+        {k: before.get(k) for k in update_data} if before else None,
+        update_data,
+        request.state.request_id,
+    )
+    return result
+
+
+@router.delete("/api/admin/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    request: Request,
+    payload: DeleteUserRequest | None = None,
+    admin: CurrentUser = Depends(require_admin),
+    services: Services = Depends(get_services),
+):
+    if user_id == admin.id:
+        raise ForbiddenError("Tidak dapat menghapus akun sendiri.")
+
+    before = await services.admin.user(user_id) if not services.settings.allow_mock_services else None
+    if before and before.get("account_status") == "deleted":
+        raise AppError("VALIDATION_ERROR", "Pengguna sudah dihapus.", 400)
+
+    result = await services.admin.soft_delete_user(user_id, admin.id)
+    await services.admin.audit(
+        admin.id, "user.deleted", "profile", user_id,
+        {"account_status": before.get("account_status")} if before else None,
+        {"account_status": "deleted", "reason": payload.reason if payload else None},
+        request.state.request_id,
+    )
+    return {"message": "Pengguna berhasil dihapus.", "user": result}
+
+
+@router.post("/api/admin/users/{user_id}/restore")
+async def restore_user(
+    user_id: str,
+    request: Request,
+    admin: CurrentUser = Depends(require_admin),
+    services: Services = Depends(get_services),
+):
+    before = await services.admin.user(user_id) if not services.settings.allow_mock_services else None
+    if before and before.get("account_status") != "deleted":
+        raise AppError("VALIDATION_ERROR", "Pengguna tidak dalam status dihapus.", 400)
+
+    result = await services.admin.restore_user(user_id)
+    await services.admin.audit(
+        admin.id, "user.restored", "profile", user_id,
+        {"account_status": "deleted"},
+        {"account_status": "active"},
+        request.state.request_id,
+    )
+    return {"message": "Pengguna berhasil dipulihkan.", "user": result}
 
 
 @router.get("/api/v1/admin/usage/features")

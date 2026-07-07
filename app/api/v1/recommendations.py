@@ -1,4 +1,5 @@
 import logging
+import time
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
@@ -21,7 +22,39 @@ async def analyze(
     user: CurrentUser = Depends(get_current_user),
     services: Services = Depends(get_services),
 ) -> HerbalRecommendationResponse:
-    return await services.recommendation_orchestrator.analyze(user.id, payload, request.state.request_id)
+    started = time.perf_counter()
+    try:
+        result = await services.recommendation_orchestrator.analyze(user.id, payload, request.state.request_id)
+        elapsed = int((time.perf_counter() - started) * 1000)
+
+        # Log AI usage
+        await services.ai_usage_logger.log(
+            user_id=user.id,
+            model="graphrag",
+            latency_ms=elapsed,
+            status="success",
+            persona=payload.persona if hasattr(payload, 'persona') else None,
+            endpoint="/recommendation",
+            provider="local",
+            prompt_text=payload.complaint,
+            request_id=request.state.request_id,
+        )
+        return result
+    except Exception as exc:
+        elapsed = int((time.perf_counter() - started) * 1000)
+        await services.ai_usage_logger.log(
+            user_id=user.id,
+            model="graphrag",
+            latency_ms=elapsed,
+            status="error",
+            error_code=str(type(exc).__name__),
+            persona=payload.persona if hasattr(payload, 'persona') else None,
+            endpoint="/recommendation",
+            provider="local",
+            prompt_text=payload.complaint,
+            request_id=request.state.request_id,
+        )
+        raise
 
 
 @router.get("/api/herbal-recommendations/herbs/{herb_id}/detail")

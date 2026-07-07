@@ -12,6 +12,8 @@ from app.logic.chat_orchestrator import ChatOrchestrator
 from app.logic.quiz_orchestrator import QuizOrchestrator
 from app.logic.recommendation_orchestrator import RecommendationOrchestrator
 from app.services.ai.model_gateway import ModelGateway
+from app.services.admin_ai_usage_service import AdminAIUsageService
+from app.services.analytics.ai_usage_logger import AIUsageLogger
 from app.services.documents.extractor import DocumentExtractor
 from app.services.documents.image_processor import ImageProcessor
 from app.services.external.http_client import ExternalHttpClient
@@ -46,6 +48,8 @@ class Services:
     chat_orchestrator: ChatOrchestrator
     recommendation_orchestrator: RecommendationOrchestrator
     quiz_orchestrator: QuizOrchestrator
+    ai_usage_logger: AIUsageLogger
+    admin_ai_usage: AdminAIUsageService
 
 
 async def create_services(settings: Settings) -> Services:
@@ -67,7 +71,9 @@ async def create_services(settings: Settings) -> Services:
     attachments = AttachmentOrchestrator(settings, storage, supabase, DocumentExtractor(settings), image)
     evidence = EvidenceAgent(pubmed, pubchem)
     agent_graph = AgenticGraph(SupervisorAgent(evidence), retriever, gateway)
-    chat_orchestrator = ChatOrchestrator(chats, agent_graph)
+    ai_usage_logger = AIUsageLogger(supabase)
+    admin_ai_usage = AdminAIUsageService(supabase)
+    chat_orchestrator = ChatOrchestrator(chats, agent_graph, ai_usage_logger)
     recommendation = RecommendationOrchestrator(repo, supabase, settings.allow_mock_services)
     quiz_orch = QuizOrchestrator(quiz)
     return Services(
@@ -89,6 +95,8 @@ async def create_services(settings: Settings) -> Services:
         chat_orchestrator,
         recommendation,
         quiz_orch,
+        ai_usage_logger,
+        admin_ai_usage,
     )
 
 

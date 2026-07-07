@@ -26,21 +26,37 @@ class AdminService:
         rows = await self.client.request("POST", "rpc/admin_dashboard_overview", json={})
         return rows[0] if isinstance(rows, list) and rows else rows
 
-    async def users(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+    async def users(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        search: str | None = None,
+        role: str | None = None,
+        status: str | None = None,
+        sort: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> tuple[list[dict[str, Any]], int]:
         if self.client.settings.allow_mock_services:
-            return []
-        rows = await self.client.select(
-            "profiles",
-            {
-                "select": "id,email,full_name,application_role,persona,account_status,instansi,created_at,last_active_at",
-                "order": "created_at.desc",
-                "limit": str(min(limit, 200)),
-                "offset": str(max(offset, 0)),
-            },
-        )
+            return [], 0
+
+        params: dict[str, Any] = {
+            "select": "id,email,full_name,application_role,persona,account_status,instansi,created_at,last_active_at,deleted_at,deleted_by",
+            "order": f"{sort}.{sort_dir}",
+            "limit": str(min(limit, 200)),
+            "offset": str(max(offset, 0)),
+        }
+        if search:
+            safe = search.replace("%", "").replace("(", "").replace(")", "")
+            params["or"] = f"(full_name.ilike.%{safe}%,email.ilike.%{safe}%)"
+        if role:
+            params["application_role"] = f"eq.{role}"
+        if status:
+            params["account_status"] = f"eq.{status}"
+
+        rows, total = await self.client.select_with_count("profiles", params)
         for row in rows:
             row["role"] = row.get("application_role", "user")
-        return rows
+        return rows, total
 
     async def user(self, user_id: str) -> dict[str, Any]:
         if self.client.settings.allow_mock_services:
@@ -119,6 +135,54 @@ class AdminService:
         await self.client.insert(
             "feature_usage_events", {"user_id": user_id, "event_name": event_name, "metadata": metadata or {}}
         )
+
+    # ── CRUD User Methods ──
+
+    async def create_user_profile(
+        self, user_id: str, email: str, full_name: str, role: str = "user", instansi: str | None = None
+    ) -> dict[str, Any]:
+        now = datetime.now(timezone.utc).isoformat()
+        payload = {
+            "id": user_id,
+            "email": email,
+            "full_name": full_name,
+            "instansi": instansi or "",
+            "application_role": role,
+            "persona": "umum",
+            "account_status": "active",
+            "updated_at": now,
+        }
+        if self.client.settings.allow_mock_services:
+            return payload
+        rows = await self.client.insert("profiles", payload)
+        return rows[0] if isinstance(rows, list) and rows else payload
+
+    async def update_user(self, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+        if self.client.settings.allow_mock_services:
+            return payload
+        rows = await self.client.update("profiles", {"id": f"eq.{user_id}"}, payload)
+        if not rows:
+            raise NotFoundError("Pengguna tidak ditemukan.")
+        row = rows[0] if isinstance(rows, list) else rows
+        row["role"] = row.get("application_role", "user")
+        return row
+
+    async def soft_delete_user(self, user_id: str, admin_id: str) -> dict[str, Any]:
+        payload = {
+            "account_status": "deleted",
+            "deleted_at": datetime.now(timezone.utc).isoformat(),
+            "deleted_by": admin_id,
+        }
+        return await self.update_user(user_id, payload)
+
+    async def restore_user(self, user_id: str) -> dict[str, Any]:
+        payload = {
+            "account_status": "active",
+            "deleted_at": None,
+            "deleted_by": None,
+        }
+        return await self.update_user(user_id, payload)
 
     async def get_system_health(self, services: Any) -> dict[str, Any]:
         """Check the health status of FastAPI, Supabase, Neo4j, MinIO, and LLM services."""

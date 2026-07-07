@@ -36,3 +36,11 @@ class AuthService:
     async def change_password(self, token: str, new_password: str) -> None:
         self._cache.clear()
         await self.client.auth_request("PUT", "user", json={"password": new_password}, token=token)
+
+    async def admin_create_user(self, email: str, password: str) -> dict[str, Any]:
+        """Create user via Supabase Admin API (service_role). Skips email verification."""
+        return await self.client.auth_admin_request(
+            "POST",
+            "admin/users",
+            json={"email": email, "password": password, "email_confirm": True},
+        )
