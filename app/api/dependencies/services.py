@@ -14,6 +14,7 @@ from app.logic.recommendation_orchestrator import RecommendationOrchestrator
 from app.services.ai.model_gateway import ModelGateway
 from app.services.admin_ai_usage_service import AdminAIUsageService
 from app.services.admin_graphrag_service import AdminGraphRAGService
+from app.services.admin_recommendation_service import AdminRecommendationService
 from app.services.analytics.ai_usage_logger import AIUsageLogger
 from app.services.documents.extractor import DocumentExtractor
 from app.services.documents.image_processor import ImageProcessor
@@ -52,6 +53,7 @@ class Services:
     ai_usage_logger: AIUsageLogger
     admin_ai_usage: AdminAIUsageService
     admin_graphrag: AdminGraphRAGService
+    admin_recommendation: AdminRecommendationService
 
 
 async def create_services(settings: Settings) -> Services:
@@ -76,6 +78,7 @@ async def create_services(settings: Settings) -> Services:
     ai_usage_logger = AIUsageLogger(supabase)
     admin_ai_usage = AdminAIUsageService(supabase)
     admin_graphrag = AdminGraphRAGService(neo4j)
+    admin_recommendation = AdminRecommendationService(supabase)
     chat_orchestrator = ChatOrchestrator(chats, agent_graph, ai_usage_logger)
     recommendation = RecommendationOrchestrator(repo, supabase, settings.allow_mock_services)
     quiz_orch = QuizOrchestrator(quiz)
@@ -101,6 +104,7 @@ async def create_services(settings: Settings) -> Services:
         ai_usage_logger,
         admin_ai_usage,
         admin_graphrag,
+        admin_recommendation,
     )
 
 
