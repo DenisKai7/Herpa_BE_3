@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1 import (
     admin,
+    admin_graphrag,
     ai_usage,
     attachments,
     auth,
@@ -24,6 +25,7 @@ for child in [
     quiz.router,
     graph.router,
     admin.router,
+    admin_graphrag.router,
     ai_usage.router,
     storage.router,
     shared_chats.router,
