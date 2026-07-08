@@ -104,6 +104,10 @@ class SupabaseClient:
     async def insert(self, table: str, payload: dict[str, Any] | list[dict[str, Any]]) -> Any:
         return await self.request("POST", table, json=payload)
 
+    async def upsert(self, table: str, payload: dict[str, Any] | list[dict[str, Any]], on_conflict: str = "id") -> Any:
+        """Insert or update on conflict. Uses PostgREST resolution=merge-duplicates."""
+        return await self.request("POST", table, json=payload, prefer="return=representation,resolution=merge-duplicates")
+
     async def update(self, table: str, params: dict[str, Any], payload: dict[str, Any]) -> Any:
         return await self.request("PATCH", table, params=params, json=payload)
 

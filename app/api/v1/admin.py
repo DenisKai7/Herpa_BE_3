@@ -11,6 +11,7 @@ from app.models.admin import (
     AdminAnalytics,
     CreateUserRequest,
     DeleteUserRequest,
+    ResetPasswordRequest,
     UpdateUserRoleRequest,
     UpdateUserRequest,
     UpdateUserStatusRequest,
@@ -123,15 +124,35 @@ async def create_user(
     admin: CurrentUser = Depends(require_admin),
     services: Services = Depends(get_services),
 ):
-    auth_user = await services.auth.admin_create_user(payload.email, payload.password)
+    # Step 1: Create Auth user
+    try:
+        auth_user = await services.auth.admin_create_user(payload.email, payload.password)
+    except Exception as exc:
+        error_msg = str(exc)
+        if "already" in error_msg.lower() or "exists" in error_msg.lower():
+            raise AppError("CONFLICT", "Email sudah terdaftar.", 409)
+        raise
+
     user_id = auth_user["id"]
-    profile = await services.admin.create_user_profile(
-        user_id=user_id,
-        email=payload.email,
-        full_name=payload.full_name,
-        role=payload.role.value,
-        instansi=payload.instansi,
-    )
+
+    # Step 2: Create/update profile (upsert handles trigger-created profiles)
+    try:
+        profile = await services.admin.create_user_profile(
+            user_id=user_id,
+            email=payload.email,
+            full_name=payload.full_name,
+            role=payload.role.value,
+            instansi=payload.instansi,
+        )
+    except Exception as exc:
+        # Rollback: delete Auth user if profile creation fails
+        logger.warning(f"Profile creation failed for {user_id}, rolling back auth user: {exc}")
+        try:
+            await services.supabase.request("DELETE", f"auth/admin/users/{user_id}", prefer="return=minimal")
+        except Exception:
+            logger.error(f"Failed to rollback auth user {user_id}")
+        raise AppError("PROFILE_ERROR", "Gagal membuat profile user.", 500)
+
     await services.admin.audit(
         admin.id, "user.created", "profile", user_id,
         None, {"email": payload.email, "full_name": payload.full_name, "role": payload.role.value},
@@ -225,6 +246,24 @@ async def restore_user(
         request.state.request_id,
     )
     return {"message": "Pengguna berhasil dipulihkan.", "user": result}
+
+
+@router.post("/api/admin/users/{user_id}/reset-password")
+async def reset_password(
+    user_id: str,
+    payload: ResetPasswordRequest,
+    request: Request,
+    admin: CurrentUser = Depends(require_admin),
+    services: Services = Depends(get_services),
+):
+    """Reset user password via Supabase Admin API."""
+    await services.auth.admin_reset_password(user_id, payload.new_password)
+    await services.admin.audit(
+        admin.id, "user.password_reset", "profile", user_id,
+        None, {"reset": True},
+        request.state.request_id,
+    )
+    return {"message": "Password berhasil direset."}
 
 
 @router.get("/api/v1/admin/usage/features")

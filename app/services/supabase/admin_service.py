@@ -141,6 +141,7 @@ class AdminService:
     async def create_user_profile(
         self, user_id: str, email: str, full_name: str, role: str = "user", instansi: str | None = None
     ) -> dict[str, Any]:
+        """Create or update user profile. Uses upsert to handle trigger-created profiles."""
         now = datetime.now(timezone.utc).isoformat()
         payload = {
             "id": user_id,
@@ -154,7 +155,8 @@ class AdminService:
         }
         if self.client.settings.allow_mock_services:
             return payload
-        rows = await self.client.insert("profiles", payload)
+        # Use upsert: trigger on_auth_user_created may have already created a basic profile
+        rows = await self.client.upsert("profiles", payload, on_conflict="id")
         return rows[0] if isinstance(rows, list) and rows else payload
 
     async def update_user(self, user_id: str, payload: dict[str, Any]) -> dict[str, Any]:

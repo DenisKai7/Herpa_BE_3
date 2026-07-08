@@ -44,3 +44,11 @@ class AuthService:
             "admin/users",
             json={"email": email, "password": password, "email_confirm": True},
         )
+
+    async def admin_reset_password(self, user_id: str, new_password: str) -> dict[str, Any]:
+        """Reset user password via Supabase Admin API (service_role)."""
+        return await self.client.auth_admin_request(
+            "PUT",
+            f"admin/users/{user_id}",
+            json={"password": new_password},
+        )

@@ -62,6 +62,10 @@ class DeleteUserRequest(BaseModel):
     reason: str | None = None
 
 
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
 class UserListResponse(BaseModel):
     users: list[AdminUser] = []
     total: int = 0
