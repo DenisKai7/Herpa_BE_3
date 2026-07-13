@@ -1,0 +1,41 @@
+[
+  {"id": 1, "category": "nama_tanaman", "query": "Apa nama ilmiah kunyit?"},
+  {"id": 2, "category": "nama_tanaman", "query": "Apa nama latin jahe?"},
+  {"id": 5, "category": "nama_tanaman", "query": "Nama latin sambiloto apa?"},
+
+  {"id": 16, "category": "manfaat_herbal", "query": "Apa manfaat kunyit untuk kesehatan?"},
+  {"id": 17, "category": "manfaat_herbal", "query": "Apa saja khasiat jahe bagi tubuh?"},
+  {"id": 21, "category": "manfaat_herbal", "query": "Apa saja manfaat sambiloto?"},
+
+  {"id": 31, "category": "senyawa_aktif", "query": "Apa senyawa aktif yang terdapat pada kunyit?"},
+  {"id": 32, "category": "senyawa_aktif", "query": "Sebutkan kandungan fitokimia jahe"},
+  {"id": 35, "category": "senyawa_aktif", "query": "Kandungan kimia sambiloto apa?"},
+
+  {"id": 46, "category": "efek_samping", "query": "Apa efek samping kunyit jika dikonsumsi berlebihan?"},
+  {"id": 47, "category": "efek_samping", "query": "Efek samping jahe apa saja?"},
+  {"id": 49, "category": "efek_samping", "query": "Efek samping sambiloto jika dikonsumsi jangka panjang"},
+
+  {"id": 56, "category": "interaksi_obat", "query": "Apakah kunyit berinteraksi dengan obat pengencer darah?"},
+  {"id": 57, "category": "interaksi_obat", "query": "Interaksi jahe dengan obat diabetes apa?"},
+  {"id": 60, "category": "interaksi_obat", "query": "Apakah sambiloto berinteraksi dengan obat imunosupresan?"},
+
+  {"id": 66, "category": "kontraindikasi", "query": "Apakah kunyit aman untuk ibu hamil?"},
+  {"id": 67, "category": "kontraindikasi", "query": "Kontraindikasi jahe bagi penderita maag"},
+  {"id": 69, "category": "kontraindikasi", "query": "Apakah sambiloto aman untuk anak-anak?"},
+
+  {"id": 76, "category": "dosis", "query": "Berapa dosis aman kunyit per hari?"},
+  {"id": 77, "category": "dosis", "query": "Dosis jahe yang dianjurkan untuk konsumsi harian"},
+  {"id": 79, "category": "dosis", "query": "Dosis sambiloto untuk pengobatan apa?"},
+
+  {"id": 81, "category": "gejala", "query": "Herbal apa yang cocok untuk batuk berdahak?"},
+  {"id": 83, "category": "gejala", "query": "Herbal apa untuk mengatasi mual dan muntah?"},
+  {"id": 86, "category": "gejala", "query": "Tanaman herbal untuk meredakan nyeri sendi"},
+
+  {"id": 91, "category": "penyakit", "query": "Herbal apa yang baik untuk penderita diabetes?"},
+  {"id": 92, "category": "penyakit", "query": "Tanaman herbal untuk penderita hipertensi"},
+  {"id": 94, "category": "penyakit", "query": "Tanaman herbal untuk penderita kolesterol tinggi"},
+
+  {"id": 96, "category": "kompleks", "query": "Apa hubungan Curcumin dengan aktivitas antiinflamasi?"},
+  {"id": 97, "category": "kompleks", "query": "Bandingkan manfaat kunyit dan temulawak untuk kesehatan hati"},
+  {"id": 100, "category": "kompleks", "query": "Herbal apa saja yang memiliki aktivitas hepatoprotektif dan apa mekanismenya?"}
+]

@@ -1,0 +1,12 @@
+[
+  {"id": 1, "category": "nama_tanaman", "query": "Apa nama ilmiah kunyit?"},
+  {"id": 16, "category": "manfaat_herbal", "query": "Apa manfaat kunyit untuk kesehatan?"},
+  {"id": 31, "category": "senyawa_aktif", "query": "Apa senyawa aktif yang terdapat pada kunyit?"},
+  {"id": 46, "category": "efek_samping", "query": "Apa efek samping kunyit jika dikonsumsi berlebihan?"},
+  {"id": 56, "category": "interaksi_obat", "query": "Apakah kunyit berinteraksi dengan obat pengencer darah?"},
+  {"id": 66, "category": "kontraindikasi", "query": "Apakah kunyit aman untuk ibu hamil?"},
+  {"id": 76, "category": "dosis", "query": "Berapa dosis aman kunyit per hari?"},
+  {"id": 81, "category": "gejala", "query": "Herbal apa yang cocok untuk batuk berdahak?"},
+  {"id": 91, "category": "penyakit", "query": "Herbal apa yang baik untuk penderita diabetes?"},
+  {"id": 96, "category": "kompleks", "query": "Apa hubungan Curcumin dengan aktivitas antiinflamasi?"}
+]

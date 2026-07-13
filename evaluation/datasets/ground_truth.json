@@ -1,0 +1,802 @@
+[
+  {
+    "id": 1,
+    "query": "Apa nama ilmiah kunyit?",
+    "expected_answer": "Kunyit memiliki nama ilmiah Curcuma longa.",
+    "expected_nodes": ["Curcuma longa"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Curcuma longa", "kunyit"]
+  },
+  {
+    "id": 2,
+    "query": "Apa nama latin jahe?",
+    "expected_answer": "Jahe memiliki nama latin Zingiber officinale.",
+    "expected_nodes": ["Zingiber officinale"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Zingiber officinale", "jahe"]
+  },
+  {
+    "id": 3,
+    "query": "Sebutkan nama ilmiah temulawak",
+    "expected_answer": "Temulawak memiliki nama ilmiah Curcuma xanthorrhiza.",
+    "expected_nodes": ["Curcuma xanthorrhiza"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Curcuma xanthorrhiza", "temulawak"]
+  },
+  {
+    "id": 4,
+    "query": "Apa nama saintifik kencur?",
+    "expected_answer": "Kencur memiliki nama saintifik Kaempferia galanga.",
+    "expected_nodes": ["Kaempferia galanga"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Kaempferia galanga", "kencur"]
+  },
+  {
+    "id": 5,
+    "query": "Nama latin sambiloto apa?",
+    "expected_answer": "Sambiloto memiliki nama latin Andrographis paniculata.",
+    "expected_nodes": ["Andrographis paniculata"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Andrographis paniculata", "sambiloto"]
+  },
+  {
+    "id": 6,
+    "query": "Apa nama ilmiah pegagan?",
+    "expected_answer": "Pegagan memiliki nama ilmiah Centella asiatica.",
+    "expected_nodes": ["Centella asiatica"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Centella asiatica", "pegagan"]
+  },
+  {
+    "id": 7,
+    "query": "Sebutkan nama latin daun sirih",
+    "expected_answer": "Daun sirih memiliki nama latin Piper betle.",
+    "expected_nodes": ["Piper betle"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Piper betle", "daun sirih"]
+  },
+  {
+    "id": 8,
+    "query": "Apa nama saintifik meniran?",
+    "expected_answer": "Meniran memiliki nama saintifik Phyllanthus niruri.",
+    "expected_nodes": ["Phyllanthus niruri"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Phyllanthus niruri", "meniran"]
+  },
+  {
+    "id": 9,
+    "query": "Apa nama ilmiah bawang putih?",
+    "expected_answer": "Bawang putih memiliki nama ilmiah Allium sativum.",
+    "expected_nodes": ["Allium sativum"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Allium sativum", "bawang putih"]
+  },
+  {
+    "id": 10,
+    "query": "Nama latin jeruk nipis apa?",
+    "expected_answer": "Jeruk nipis memiliki nama latin Citrus aurantifolia.",
+    "expected_nodes": ["Citrus aurantifolia"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Citrus aurantifolia", "jeruk nipis"]
+  },
+  {
+    "id": 11,
+    "query": "Apa nama ilmiah ginseng?",
+    "expected_answer": "Ginseng memiliki nama ilmiah Panax ginseng.",
+    "expected_nodes": ["Panax ginseng"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Panax ginseng", "ginseng"]
+  },
+  {
+    "id": 12,
+    "query": "Sebutkan nama saintifik lidah buaya",
+    "expected_answer": "Lidah buaya memiliki nama saintifik Aloe vera.",
+    "expected_nodes": ["Aloe vera"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Aloe vera", "lidah buaya"]
+  },
+  {
+    "id": 13,
+    "query": "Apa nama latin daun jambu biji?",
+    "expected_answer": "Daun jambu biji memiliki nama latin Psidium guajava.",
+    "expected_nodes": ["Psidium guajava"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Psidium guajava", "jambu biji"]
+  },
+  {
+    "id": 14,
+    "query": "Nama ilmiah mahkota dewa apa?",
+    "expected_answer": "Mahkota dewa memiliki nama ilmiah Phaleria macrocarpa.",
+    "expected_nodes": ["Phaleria macrocarpa"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Phaleria macrocarpa", "mahkota dewa"]
+  },
+  {
+    "id": 15,
+    "query": "Apa nama saintifik buah mengkudu?",
+    "expected_answer": "Buah mengkudu memiliki nama saintifik Morinda citrifolia.",
+    "expected_nodes": ["Morinda citrifolia"],
+    "expected_relationships": ["BELONGS_TO"],
+    "key_facts": ["Morinda citrifolia", "mengkudu"]
+  },
+  {
+    "id": 16,
+    "query": "Apa manfaat kunyit untuk kesehatan?",
+    "expected_answer": "Kunyit memiliki manfaat antiinflamasi, antioksidan, hepatoprotektif, dan membantu pencernaan. Senyawa aktif utamanya adalah kurkumin.",
+    "expected_nodes": ["Curcuma longa", "Curcumin"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR", "HAS_THERAPEUTIC_USE"],
+    "key_facts": ["antiinflamasi", "antioksidan", "hepatoprotektif", "kurkumin", "pencernaan"]
+  },
+  {
+    "id": 17,
+    "query": "Apa saja khasiat jahe bagi tubuh?",
+    "expected_answer": "Jahe berkhasiat sebagai antiemetik (anti mual), antiinflamasi, antioksidan, dan membantu pencernaan. Senyawa aktifnya meliputi gingerol dan shogaol.",
+    "expected_nodes": ["Zingiber officinale", "Gingerol"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["antimual", "antiinflamasi", "antioksidan", "gingerol", "pencernaan"]
+  },
+  {
+    "id": 18,
+    "query": "Manfaat temulawak apa saja?",
+    "expected_answer": "Temulawak bermanfaat sebagai hepatoprotektif, antiinflamasi, antioksidan, dan meningkatkan nafsu makan. Mengandung kurkumin dan xanthorrhizol.",
+    "expected_nodes": ["Curcuma xanthorrhiza", "Curcumin", "Xanthorrhizol"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["hepatoprotektif", "antiinflamasi", "nafsu makan", "kurkumin", "xanthorrhizol"]
+  },
+  {
+    "id": 19,
+    "query": "Apa kegunaan pegagan untuk kesehatan otak?",
+    "expected_answer": "Pegagan berguna untuk meningkatkan fungsi kognitif, memori, dan neuroprotektif. Senyawa aktifnya adalah asiaticoside dan madecassoside.",
+    "expected_nodes": ["Centella asiatica", "Asiaticoside"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["kognitif", "memori", "neuroprotektif", "asiaticoside"]
+  },
+  {
+    "id": 20,
+    "query": "Sebutkan manfaat daun sirih untuk kesehatan",
+    "expected_answer": "Daun sirih bermanfaat sebagai antimikroba, antiseptik, antiinflamasi, dan antidiabetik. Mengandung senyawa eugenol dan chavicol.",
+    "expected_nodes": ["Piper betle", "Eugenol"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["antimikroba", "antiseptik", "antiinflamasi", "eugenol"]
+  },
+  {
+    "id": 21,
+    "query": "Apa saja manfaat sambiloto?",
+    "expected_answer": "Sambiloto bermanfaat sebagai antiinflamasi, antipiretik, hepatoprotektif, dan imunostimulan. Senyawa aktif utamanya adalah andrographolide.",
+    "expected_nodes": ["Andrographis paniculata", "Andrographolide"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["antiinflamasi", "antipiretik", "hepatoprotektif", "andrographolide"]
+  },
+  {
+    "id": 22,
+    "query": "Khasiat meniran untuk kesehatan apa?",
+    "expected_answer": "Meniran berkhasiat sebagai hepatoprotektif, antiurolitik, antidiabetik, dan imunostimulan. Mengandung senyawa phyllanthin dan niranthin.",
+    "expected_nodes": ["Phyllanthus niruri", "Phyllanthin"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["hepatoprotektif", "antiurolitik", "phyllanthin"]
+  },
+  {
+    "id": 23,
+    "query": "Apa manfaat bawang putih untuk jantung?",
+    "expected_answer": "Bawang putih bermanfaat untuk kesehatan jantung karena dapat menurunkan kolesterol, tekanan darah, dan memiliki aktivitas antitrombotik. Senyawa aktifnya adalah allicin.",
+    "expected_nodes": ["Allium sativum", "Allicin"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["kolesterol", "tekanan darah", "antitrombotik", "allicin"]
+  },
+  {
+    "id": 24,
+    "query": "Manfaat kencur untuk pencernaan apa?",
+    "expected_answer": "Kencur bermanfaat untuk pencernaan sebagai antispasmodik, karminatif, dan mengatasi perut kembung. Mengandung etil p-metoksi sinamat.",
+    "expected_nodes": ["Kaempferia galanga"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["antispasmodik", "karminatif", "kembung", "pencernaan"]
+  },
+  {
+    "id": 25,
+    "query": "Apa saja manfaat jeruk nipis?",
+    "expected_answer": "Jeruk nipis bermanfaat sebagai antioksidan, antimikroba, membantu pencernaan, dan kaya vitamin C. Mengandung limonen dan asam sitrat.",
+    "expected_nodes": ["Citrus aurantifolia"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["antioksidan", "antimikroba", "vitamin C", "limonen"]
+  },
+  {
+    "id": 26,
+    "query": "Khasiat ginseng untuk energi dan vitalitas",
+    "expected_answer": "Ginseng berkhasiat sebagai adaptogen yang meningkatkan energi, vitalitas, daya tahan tubuh, dan fungsi kognitif. Senyawa aktif utamanya adalah ginsenosida.",
+    "expected_nodes": ["Panax ginseng", "Ginsenoside"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["adaptogen", "energi", "vitalitas", "ginsenosida", "kognitif"]
+  },
+  {
+    "id": 27,
+    "query": "Apa manfaat lidah buaya untuk kulit?",
+    "expected_answer": "Lidah buaya bermanfaat untuk kulit sebagai pelembab, penyembuh luka, antiinflamasi, dan melindungi dari sinar UV. Mengandung acemannan dan aloin.",
+    "expected_nodes": ["Aloe vera"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["pelembab", "penyembuh luka", "antiinflamasi", "acemannan"]
+  },
+  {
+    "id": 28,
+    "query": "Manfaat daun jambu biji untuk diare",
+    "expected_answer": "Daun jambu biji bermanfaat untuk mengatasi diare karena memiliki aktivitas antimikroba dan astringen. Mengandung quercetin dan tanin.",
+    "expected_nodes": ["Psidium guajava", "Quercetin"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["diare", "antimikroba", "astringen", "quercetin", "tanin"]
+  },
+  {
+    "id": 29,
+    "query": "Apa khasiat mahkota dewa?",
+    "expected_answer": "Mahkota dewa berkhasiat sebagai antioksidan, antiinflamasi, antiproliferatif, dan hepatoprotektif. Mengandung senyawa saponin dan polifenol.",
+    "expected_nodes": ["Phaleria macrocarpa"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["antioksidan", "antiinflamasi", "saponin", "polifenol"]
+  },
+  {
+    "id": 30,
+    "query": "Manfaat buah mengkudu untuk kesehatan",
+    "expected_answer": "Buah mengkudu bermanfaat sebagai antioksidan, antiinflamasi, imunomodulator, dan antiproliferatif. Mengandung senyawa scopoletin dan damnacanthal.",
+    "expected_nodes": ["Morinda citrifolia"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["antioksidan", "antiinflamasi", "imunomodulator", "scopoletin"]
+  },
+  {
+    "id": 31,
+    "query": "Apa senyawa aktif yang terdapat pada kunyit?",
+    "expected_answer": "Senyawa aktif kunyit meliputi kurkumin, demetoksikurkumin, dan bisdemetoksikurkumin. Kurkumin merupakan senyawa utama dengan aktivitas antiinflamasi dan antioksidan.",
+    "expected_nodes": ["Curcuma longa", "Curcumin"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["kurkumin", "demetoksikurkumin", "bisdemetoksikurkumin"]
+  },
+  {
+    "id": 32,
+    "query": "Sebutkan kandungan fitokimia jahe",
+    "expected_answer": "Kandungan fitokimia jahe meliputi gingerol, shogaol, zingeron, dan minyak atsiri. Gingerol merupakan senyawa aktif utama.",
+    "expected_nodes": ["Zingiber officinale", "Gingerol"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["gingerol", "shogaol", "zingeron", "minyak atsiri"]
+  },
+  {
+    "id": 33,
+    "query": "Senyawa aktif temulawak apa saja?",
+    "expected_answer": "Senyawa aktif temulawak meliputi kurkumin, xanthorrhizol, germakron, dan minyak atsiri.",
+    "expected_nodes": ["Curcuma xanthorrhiza", "Curcumin", "Xanthorrhizol"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["kurkumin", "xanthorrhizol", "germakron"]
+  },
+  {
+    "id": 34,
+    "query": "Apa saja senyawa aktif pada bawang putih?",
+    "expected_answer": "Senyawa aktif bawang putih meliputi allicin, dialil disulfida (DADS), S-allyl cysteine, dan ajoene. Allicin merupakan senyawa utama.",
+    "expected_nodes": ["Allium sativum", "Allicin"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["allicin", "DADS", "S-allyl cysteine", "ajoene"]
+  },
+  {
+    "id": 35,
+    "query": "Kandungan kimia sambiloto apa?",
+    "expected_answer": "Kandungan kimia sambiloto meliputi andrographolide, neoandrographolide, dan andrographan. Andrographolide adalah senyawa aktif utama.",
+    "expected_nodes": ["Andrographis paniculata", "Andrographolide"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["andrographolide", "neoandrographolide", "andrographan"]
+  },
+  {
+    "id": 36,
+    "query": "Senyawa aktif utama pegagan apa?",
+    "expected_answer": "Senyawa aktif utama pegagan adalah asiaticoside, madecassoside, asam asiatatik, dan asam madecassik.",
+    "expected_nodes": ["Centella asiatica", "Asiaticoside"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["asiaticoside", "madecassoside", "asam asiatatik"]
+  },
+  {
+    "id": 37,
+    "query": "Apa senyawa aktif daun sirih?",
+    "expected_answer": "Senyawa aktif daun sirih meliputi eugenol, chavicol, hidroksikavikol, dan terpenoid.",
+    "expected_nodes": ["Piper betle", "Eugenol"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["eugenol", "chavicol", "hidroksikavikol", "terpenoid"]
+  },
+  {
+    "id": 38,
+    "query": "Sebutkan fitokimia yang terkandung dalam meniran",
+    "expected_answer": "Fitokimia meniran meliputi phyllanthin, niranthin, hypophyllanthin, dan flavonoid.",
+    "expected_nodes": ["Phyllanthus niruri", "Phyllanthin"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["phyllanthin", "niranthin", "hypophyllanthin", "flavonoid"]
+  },
+  {
+    "id": 39,
+    "query": "Apa senyawa aktif kencur?",
+    "expected_answer": "Senyawa aktif kencur meliputi etil p-metoksi sinamat, asam sinamat, dan minyak atsiri.",
+    "expected_nodes": ["Kaempferia galanga"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["etil p-metoksi sinamat", "asam sinamat", "minyak atsiri"]
+  },
+  {
+    "id": 40,
+    "query": "Kandungan aktif jeruk nipis apa saja?",
+    "expected_answer": "Kandungan aktif jeruk nipis meliputi limonen, asam sitrat, vitamin C, dan flavonoid.",
+    "expected_nodes": ["Citrus aurantifolia"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["limonen", "asam sitrat", "vitamin C", "flavonoid"]
+  },
+  {
+    "id": 41,
+    "query": "Senyawa ginsenosida ditemukan pada tanaman apa?",
+    "expected_answer": "Ginsenosida ditemukan pada tanaman ginseng (Panax ginseng). Ginsenosida merupakan senyawa aktif utama yang memberikan efek adaptogenik.",
+    "expected_nodes": ["Panax ginseng", "Ginsenoside"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["ginsenosida", "Panax ginseng", "adaptogen"]
+  },
+  {
+    "id": 42,
+    "query": "Tanaman herbal apa yang mengandung kurkumin?",
+    "expected_answer": "Kurkumin ditemukan pada kunyit (Curcuma longa) dan temulawak (Curcuma xanthorrhiza). Kurkumin memiliki aktivitas antiinflamasi dan antioksidan.",
+    "expected_nodes": ["Curcuma longa", "Curcuma xanthorrhiza", "Curcumin"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["kurkumin", "kunyit", "temulawak", "antiinflamasi"]
+  },
+  {
+    "id": 43,
+    "query": "Apa senyawa aktif utama dalam gingerol?",
+    "expected_answer": "Gingerol adalah senyawa aktif utama yang ditemukan dalam jahe (Zingiber officinale). Gingerol memiliki aktivitas antiinflamasi dan antimual.",
+    "expected_nodes": ["Zingiber officinale", "Gingerol"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["gingerol", "jahe", "antiinflamasi", "antimual"]
+  },
+  {
+    "id": 44,
+    "query": "Herbal yang memiliki flavonoid apa saja?",
+    "expected_answer": "Beberapa herbal yang mengandung flavonoid antara lain kunyit, jeruk nipis, meniran, pegagan, dan daun jambu biji. Flavonoid memiliki aktivitas antioksidan.",
+    "expected_nodes": ["Curcuma longa", "Citrus aurantifolia", "Phyllanthus niruri", "Centella asiatica", "Psidium guajava"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["flavonoid", "antioksidan", "kunyit", "jeruk nipis", "meniran"]
+  },
+  {
+    "id": 45,
+    "query": "Tanaman yang mengandung andrographolide apa?",
+    "expected_answer": "Andrographolide ditemukan pada tanaman sambiloto (Andrographis paniculata). Andrographolide memiliki aktivitas antiinflamasi, hepatoprotektif, dan imunostimulan.",
+    "expected_nodes": ["Andrographis paniculata", "Andrographolide"],
+    "expected_relationships": ["HAS_COMPOUND"],
+    "key_facts": ["andrographolide", "sambiloto", "antiinflamasi", "hepatoprotektif"]
+  },
+  {
+    "id": 46,
+    "query": "Apa efek samping kunyit jika dikonsumsi berlebihan?",
+    "expected_answer": "Efek samping kunyit jika dikonsumsi berlebihan meliputi gangguan pencernaan, mual, diare, dan risiko pendarahan karena efek antikoagulan.",
+    "expected_nodes": ["Curcuma longa"],
+    "expected_relationships": ["HAS_TOXICITY", "HAS_WARNING"],
+    "key_facts": ["gangguan pencernaan", "mual", "pendarahan", "antikoagulan"]
+  },
+  {
+    "id": 47,
+    "query": "Efek samping jahe apa saja?",
+    "expected_answer": "Efek samping jahe meliputi mulas, diare, iritasi mulut, dan risiko pendarahan jika dikonsumsi bersama obat pengencer darah.",
+    "expected_nodes": ["Zingiber officinale"],
+    "expected_relationships": ["HAS_TOXICITY", "HAS_WARNING"],
+    "key_facts": ["mulas", "diare", "iritasi", "pendarahan"]
+  },
+  {
+    "id": 48,
+    "query": "Apakah temulawak memiliki efek samping?",
+    "expected_answer": "Temulawak umumnya aman dalam dosis normal, namun dapat menyebabkan mual, diare, dan iritasi lambung jika dikonsumsi berlebihan.",
+    "expected_nodes": ["Curcuma xanthorrhiza"],
+    "expected_relationships": ["HAS_TOXICITY"],
+    "key_facts": ["mual", "diare", "iritasi lambung"]
+  },
+  {
+    "id": 49,
+    "query": "Efek samping sambiloto jika dikonsumsi jangka panjang",
+    "expected_answer": "Efek samping sambiloto jangka panjang meliputi gangguan pencernaan, diare, dan potensi efek pada kesuburan. Penggunaan jangka panjang perlu pengawasan.",
+    "expected_nodes": ["Andrographis paniculata"],
+    "expected_relationships": ["HAS_TOXICITY", "HAS_WARNING"],
+    "key_facts": ["gangguan pencernaan", "diare", "kesuburan"]
+  },
+  {
+    "id": 50,
+    "query": "Apa efek negatif bawang putih bagi pencernaan?",
+    "expected_answer": "Efek negatif bawang putih bagi pencernaan meliputi mulas, kembung, mual, dan iritasi lambung terutama jika dikonsumsi mentah dalam jumlah besar.",
+    "expected_nodes": ["Allium sativum"],
+    "expected_relationships": ["HAS_TOXICITY"],
+    "key_facts": ["mulas", "kembung", "mual", "iritasi lambung"]
+  },
+  {
+    "id": 51,
+    "query": "Apakah pegagan aman untuk penggunaan jangka panjang?",
+    "expected_answer": "Pegagan umumnya aman untuk penggunaan jangka pendek hingga menengah. Penggunaan jangka panjang dapat menyebabkan hepatotoksisitas dan perlu pemantauan fungsi hati.",
+    "expected_nodes": ["Centella asiatica"],
+    "expected_relationships": ["HAS_TOXICITY", "HAS_WARNING"],
+    "key_facts": ["hepatotoksisitas", "fungsi hati", "jangka panjang"]
+  },
+  {
+    "id": 52,
+    "query": "Efek samping daun sirih apa?",
+    "expected_answer": "Efek samping daun sirih meliputi iritasi mulut, kanker mulut jika dikunyah terus-menerus, dan gangguan pencernaan.",
+    "expected_nodes": ["Piper betle"],
+    "expected_relationships": ["HAS_TOXICITY", "HAS_WARNING"],
+    "key_facts": ["iritasi mulut", "kanker mulut", "gangguan pencernaan"]
+  },
+  {
+    "id": 53,
+    "query": "Bahaya mengonsumsi ginseng berlebihan apa?",
+    "expected_answer": "Bahaya mengonsumsi ginseng berlebihan meliputi insomnia, sakit kepala, gangguan pencernaan, dan risiko interaksi dengan obat antikoagulan.",
+    "expected_nodes": ["Panax ginseng"],
+    "expected_relationships": ["HAS_TOXICITY", "HAS_WARNING"],
+    "key_facts": ["insomnia", "sakit kepala", "gangguan pencernaan", "antikoagulan"]
+  },
+  {
+    "id": 54,
+    "query": "Apakah lidah buaya aman untuk dikonsumsi?",
+    "expected_answer": "Lidah buaya bagian gel umumnya aman untuk dikonsumsi, namun bagian lateks (kulit) mengandung aloin yang dapat menyebabkan diare dan kram perut.",
+    "expected_nodes": ["Aloe vera"],
+    "expected_relationships": ["HAS_TOXICITY", "HAS_WARNING"],
+    "key_facts": ["gel", "lateks", "aloin", "diare", "kram perut"]
+  },
+  {
+    "id": 55,
+    "query": "Efek samping meniran bagi kesehatan apa?",
+    "expected_answer": "Efek samping meniran meliputi diare, gangguan pencernaan, dan potensi interaksi dengan obat antidiabetes dan antihipertensi.",
+    "expected_nodes": ["Phyllanthus niruri"],
+    "expected_relationships": ["HAS_TOXICITY"],
+    "key_facts": ["diare", "gangguan pencernaan", "antidiabetes", "antihipertensi"]
+  },
+  {
+    "id": 56,
+    "query": "Apakah kunyit berinteraksi dengan obat pengencer darah?",
+    "expected_answer": "Ya, kunyit dapat berinteraksi dengan obat pengencer darah seperti warfarin karena efek antikoagulan kurkumin yang dapat meningkatkan risiko pendarahan.",
+    "expected_nodes": ["Curcuma longa"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["warfarin", "antikoagulan", "pendarahan", "kurkumin"]
+  },
+  {
+    "id": 57,
+    "query": "Interaksi jahe dengan obat diabetes apa?",
+    "expected_answer": "Jahe dapat berinteraksi dengan obat diabetes karena dapat menurunkan kadar gula darah, sehingga risiko hipoglikemia meningkat jika dikonsumsi bersama.",
+    "expected_nodes": ["Zingiber officinale"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["diabetes", "gula darah", "hipoglikemia"]
+  },
+  {
+    "id": 58,
+    "query": "Apakah bawang putih berinteraksi dengan warfarin?",
+    "expected_answer": "Ya, bawang putih dapat berinteraksi dengan warfarin karena memiliki efek antitrombotik yang dapat meningkatkan risiko pendarahan.",
+    "expected_nodes": ["Allium sativum"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["warfarin", "antitrombotik", "pendarahan"]
+  },
+  {
+    "id": 59,
+    "query": "Interaksi ginseng dengan obat tekanan darah",
+    "expected_answer": "Ginseng dapat berinteraksi dengan obat antihipertensi karena dapat mempengaruhi tekanan darah. Konsultasi dengan dokter diperlukan.",
+    "expected_nodes": ["Panax ginseng"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["antihipertensi", "tekanan darah"]
+  },
+  {
+    "id": 60,
+    "query": "Apakah sambiloto berinteraksi dengan obat imunosupresan?",
+    "expected_answer": "Ya, sambiloto memiliki aktivitas imunostimulan sehingga dapat berinteraksi dengan obat imunosupresan dan mengurangi efektivitasnya.",
+    "expected_nodes": ["Andrographis paniculata"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["imunosupresan", "imunostimulan", "efektivitas"]
+  },
+  {
+    "id": 61,
+    "query": "Interaksi temulawak dengan obat hati apa?",
+    "expected_answer": "Temulawak memiliki efek hepatoprotektif namun dapat berinteraksi dengan obat yang dimetabolisme di hati. Konsultasi dokter diperlukan.",
+    "expected_nodes": ["Curcuma xanthorrhiza"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["hepatoprotektif", "metabolisme hati"]
+  },
+  {
+    "id": 62,
+    "query": "Apakah pegagan berinteraksi dengan obat penenang?",
+    "expected_answer": "Pegagan memiliki efek sedatif ringan sehingga dapat berinteraksi dengan obat penenang dan meningkatkan efek sedasi.",
+    "expected_nodes": ["Centella asiatica"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["sedatif", "obat penenang", "sedasi"]
+  },
+  {
+    "id": 63,
+    "query": "Interaksi daun sirih dengan obat apa saja?",
+    "expected_answer": "Daun sirih dapat berinteraksi dengan obat antikoagulan dan obat yang dimetabolisme di hati karena kandungan eugenolnya.",
+    "expected_nodes": ["Piper betle"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["antikoagulan", "metabolisme hati", "eugenol"]
+  },
+  {
+    "id": 64,
+    "query": "Apakah meniran berinteraksi dengan obat antivirus?",
+    "expected_answer": "Meniran memiliki aktivitas antivirus sehingga dapat berinteraksi dengan obat antivirus dan berpotensi meningkatkan atau mengurangi efeknya.",
+    "expected_nodes": ["Phyllanthus niruri"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["antivirus", "interaksi"]
+  },
+  {
+    "id": 65,
+    "query": "Interaksi kencur dengan obat lambung",
+    "expected_answer": "Kencur dapat berinteraksi dengan obat lambung karena memiliki efek gastroprotektif namun juga dapat mempengaruhi absorbsi obat.",
+    "expected_nodes": ["Kaempferia galanga"],
+    "expected_relationships": ["HAS_INTERACTION"],
+    "key_facts": ["gastroprotektif", "absorpsi", "obat lambung"]
+  },
+  {
+    "id": 66,
+    "query": "Apakah kunyit aman untuk ibu hamil?",
+    "expected_answer": "Kunyit dalam jumlah bumbu masakan umumnya aman, namun suplemen kunyit dosis tinggi tidak dianjurkan untuk ibu hamil karena dapat merangsang kontraksi rahim.",
+    "expected_nodes": ["Curcuma longa"],
+    "expected_relationships": ["HAS_CONTRAINDICATION", "HAS_WARNING"],
+    "key_facts": ["ibu hamil", "kontraksi rahim", "dosis tinggi"]
+  },
+  {
+    "id": 67,
+    "query": "Kontraindikasi jahe bagi penderita maag",
+    "expected_answer": "Jahe sebaiknya digunakan dengan hati-hati oleh penderita maag karena dapat meningkatkan produksi asam lambung dan memperburuk gejala.",
+    "expected_nodes": ["Zingiber officinale"],
+    "expected_relationships": ["HAS_CONTRAINDICATION"],
+    "key_facts": ["maag", "asam lambung", "iritasi"]
+  },
+  {
+    "id": 68,
+    "query": "Siapa yang tidak boleh mengonsumsi temulawak?",
+    "expected_answer": "Temulawak tidak dianjurkan untuk penderita penyakit empedu, ibu hamil dosis tinggi, dan orang yang akan menjalani operasi karena efek antikoagulan.",
+    "expected_nodes": ["Curcuma xanthorrhiza"],
+    "expected_relationships": ["HAS_CONTRAINDICATION"],
+    "key_facts": ["penyakit empedu", "ibu hamil", "operasi", "antikoagulan"]
+  },
+  {
+    "id": 69,
+    "query": "Apakah sambiloto aman untuk anak-anak?",
+    "expected_answer": "Sambiloto sebaiknya digunakan dengan hati-hati pada anak-anak dan dalam dosis yang sesuai. Konsultasi dengan dokter anak diperlukan.",
+    "expected_nodes": ["Andrographis paniculata"],
+    "expected_relationships": ["HAS_CONTRAINDICATION", "HAS_WARNING"],
+    "key_facts": ["anak-anak", "dosis", "konsultasi"]
+  },
+  {
+    "id": 70,
+    "query": "Kontraindikasi bawang putih bagi penderita gangguan pencernaan",
+    "expected_answer": "Bawang putih dapat memperburuk gangguan pencernaan seperti GERD dan tukak lambung karena sifat iritatifnya. Sebaiknya dikonsumsi setelah makan.",
+    "expected_nodes": ["Allium sativum"],
+    "expected_relationships": ["HAS_CONTRAINDICATION"],
+    "key_facts": ["GERD", "tukak lambung", "iritatif"]
+  },
+  {
+    "id": 71,
+    "query": "Apakah pegagan aman untuk ibu menyusui?",
+    "expected_answer": "Keamanan pegagan untuk ibu menyusui belum cukup diteliti. Sebaiknya hindari penggunaan atau konsultasi dengan dokter.",
+    "expected_nodes": ["Centella asiatica"],
+    "expected_relationships": ["HAS_CONTRAINDICATION", "HAS_WARNING"],
+    "key_facts": ["ibu menyusui", "keamanan", "konsultasi"]
+  },
+  {
+    "id": 72,
+    "query": "Siapa yang tidak boleh mengonsumsi ginseng?",
+    "expected_answer": "Ginseng tidak dianjurkan untuk penderita tekanan darah tinggi tidak terkontrol, diabetes, gangguan pembekuan darah, dan anak-anak.",
+    "expected_nodes": ["Panax ginseng"],
+    "expected_relationships": ["HAS_CONTRAINDICATION"],
+    "key_facts": ["tekanan darah tinggi", "diabetes", "pembekuan darah", "anak-anak"]
+  },
+  {
+    "id": 73,
+    "query": "Kontraindikasi daun sirih bagi ibu hamil",
+    "expected_answer": "Daun sirih tidak dianjurkan untuk ibu hamil karena dapat merangsang kontraksi rahim dan berisiko menyebabkan keguguran.",
+    "expected_nodes": ["Piper betle"],
+    "expected_relationships": ["HAS_CONTRAINDICATION", "HAS_WARNING"],
+    "key_facts": ["ibu hamil", "kontraksi rahim", "keguguran"]
+  },
+  {
+    "id": 74,
+    "query": "Apakah lidah buaya aman untuk penderita diabetes?",
+    "expected_answer": "Lidah buaya dapat menurunkan kadar gula darah sehingga penderita diabetes perlu memantau gula darah jika mengonsumsinya bersama obat antidiabetes.",
+    "expected_nodes": ["Aloe vera"],
+    "expected_relationships": ["HAS_CONTRAINDICATION", "HAS_INTERACTION"],
+    "key_facts": ["diabetes", "gula darah", "antidiabetes"]
+  },
+  {
+    "id": 75,
+    "query": "Kontraindikasi meniran bagi penderita penyakit autoimun",
+    "expected_answer": "Meniran memiliki aktivitas imunostimulan sehingga tidak dianjurkan untuk penderita penyakit autoimun seperti lupus dan rheumatoid arthritis.",
+    "expected_nodes": ["Phyllanthus niruri"],
+    "expected_relationships": ["HAS_CONTRAINDICATION"],
+    "key_facts": ["autoimun", "imunostimulan", "lupus"]
+  },
+  {
+    "id": 76,
+    "query": "Berapa dosis aman kunyit per hari?",
+    "expected_answer": "Dosis aman kunyit per hari adalah 1-3 gram bubuk kunyit atau 400-600 mg ekstrak kunyit standar. Untuk suplemen kurkumin, dosis 500-2000 mg per hari.",
+    "expected_nodes": ["Curcuma longa"],
+    "expected_relationships": ["HAS_PREPARATION"],
+    "key_facts": ["1-3 gram", "400-600 mg", "500-2000 mg"]
+  },
+  {
+    "id": 77,
+    "query": "Dosis jahe yang dianjurkan untuk konsumsi harian",
+    "expected_answer": "Dosis jahe yang dianjurkan adalah 1-3 gram per hari dalam bentuk segar, atau 250 mg ekstrak jahe 3-4 kali sehari.",
+    "expected_nodes": ["Zingiber officinale"],
+    "expected_relationships": ["HAS_PREPARATION"],
+    "key_facts": ["1-3 gram", "250 mg", "3-4 kali sehari"]
+  },
+  {
+    "id": 78,
+    "query": "Berapa banyak temulawak yang aman dikonsumsi?",
+    "expected_answer": "Dosis aman temulawak adalah 1.5-3 gram serbuk kering per hari atau 30-90 mg ekstrak standar per hari.",
+    "expected_nodes": ["Curcuma xanthorrhiza"],
+    "expected_relationships": ["HAS_PREPARATION"],
+    "key_facts": ["1.5-3 gram", "30-90 mg"]
+  },
+  {
+    "id": 79,
+    "query": "Dosis sambiloto untuk pengobatan apa?",
+    "expected_answer": "Dosis sambiloto untuk pengobatan adalah 3-6 gram serbuk kering per hari atau 200 mg ekstrak standar 2-3 kali sehari.",
+    "expected_nodes": ["Andrographis paniculata"],
+    "expected_relationships": ["HAS_PREPARATION"],
+    "key_facts": ["3-6 gram", "200 mg", "2-3 kali sehari"]
+  },
+  {
+    "id": 80,
+    "query": "Berapa dosis ginseng yang dianjurkan?",
+    "expected_answer": "Dosis ginseng yang dianjurkan adalah 200-400 mg ekstrak standar per hari atau 1-2 gram serbuk kering per hari.",
+    "expected_nodes": ["Panax ginseng"],
+    "expected_relationships": ["HAS_PREPARATION"],
+    "key_facts": ["200-400 mg", "1-2 gram"]
+  },
+  {
+    "id": 81,
+    "query": "Herbal apa yang cocok untuk batuk berdahak?",
+    "expected_answer": "Herbal yang cocok untuk batuk berdahak antara lain jahe (ekspektoran), kunyit (antiinflamasi saluran napas), dan daun sirih (antimikroba saluran napas).",
+    "expected_nodes": ["Zingiber officinale", "Curcuma longa", "Piper betle"],
+    "expected_relationships": ["USED_FOR", "MAY_HELP_WITH"],
+    "key_facts": ["batuk berdahak", "ekspektoran", "antiinflamasi", "antimikroba"]
+  },
+  {
+    "id": 82,
+    "query": "Tanaman herbal untuk mengatasi sakit kepala",
+    "expected_answer": "Tanaman herbal untuk sakit kepala antara lain jahe (analgesik), pegagan (meningkatkan sirkulasi otak), dan kunyit (antiinflamasi).",
+    "expected_nodes": ["Zingiber officinale", "Centella asiatica", "Curcuma longa"],
+    "expected_relationships": ["USED_FOR", "MAY_HELP_WITH"],
+    "key_facts": ["sakit kepala", "analgesik", "sirkulasi otak"]
+  },
+  {
+    "id": 83,
+    "query": "Herbal apa untuk mengatasi mual dan muntah?",
+    "expected_answer": "Herbal untuk mual dan muntah antara lain jahe (antimual paling efektif), kencur, dan jeruk nipis.",
+    "expected_nodes": ["Zingiber officinale", "Kaempferia galanga", "Citrus aurantifolia"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["mual", "muntah", "antimual", "jahe"]
+  },
+  {
+    "id": 84,
+    "query": "Tanaman herbal untuk mengobati diare",
+    "expected_answer": "Tanaman herbal untuk diare antara lain daun jambu biji (astringen), kunyit (antimikroba), dan jeruk nipis.",
+    "expected_nodes": ["Psidium guajava", "Curcuma longa", "Citrus aurantifolia"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["diare", "astringen", "antimikroba"]
+  },
+  {
+    "id": 85,
+    "query": "Herbal apa yang bisa mengatasi perut kembung?",
+    "expected_answer": "Herbal untuk perut kembung antara lain jahe (karminatif), kencur (antispasmodik), dan kunyit.",
+    "expected_nodes": ["Zingiber officinale", "Kaempferia galanga", "Curcuma longa"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["kembung", "karminatif", "antispasmodik"]
+  },
+  {
+    "id": 86,
+    "query": "Tanaman herbal untuk meredakan nyeri sendi",
+    "expected_answer": "Tanaman herbal untuk nyeri sendi antara lain kunyit (antiinflamasi), jahe (analgesik), dan pegagan (antiinflamasi).",
+    "expected_nodes": ["Curcuma longa", "Zingiber officinale", "Centella asiatica"],
+    "expected_relationships": ["USED_FOR", "MAY_HELP_WITH"],
+    "key_facts": ["nyeri sendi", "antiinflamasi", "analgesik"]
+  },
+  {
+    "id": 87,
+    "query": "Herbal apa untuk mengatasi demam?",
+    "expected_answer": "Herbal untuk demam antara lain sambiloto (antipiretik), jahe (diaphoreik), dan kunyit.",
+    "expected_nodes": ["Andrographis paniculata", "Zingiber officinale", "Curcuma longa"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["demam", "antipiretik", "diaphoreik"]
+  },
+  {
+    "id": 88,
+    "query": "Tanaman herbal untuk mengobati luka bakar ringan",
+    "expected_answer": "Tanaman herbal untuk luka bakar ringan antara lain lidah buaya (penyembuh luka), kunyit (antiinflamasi), dan daun sirih (antiseptik).",
+    "expected_nodes": ["Aloe vera", "Curcuma longa", "Piper betle"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["luka bakar", "penyembuh luka", "antiseptik"]
+  },
+  {
+    "id": 89,
+    "query": "Herbal apa untuk meningkatkan nafsu makan?",
+    "expected_answer": "Herbal untuk meningkatkan nafsu makan antara lain temulawak (oreksigenik), kunyit, dan jahe.",
+    "expected_nodes": ["Curcuma xanthorrhiza", "Curcuma longa", "Zingiber officinale"],
+    "expected_relationships": ["USED_FOR"],
+    "key_facts": ["nafsu makan", "oreksigenik", "temulawak"]
+  },
+  {
+    "id": 90,
+    "query": "Tanaman herbal untuk mengatasi susah tidur",
+    "expected_answer": "Tanaman herbal untuk susah tidur antara lain pegagan (sedatif ringan), jahe, dan kunyit.",
+    "expected_nodes": ["Centella asiatica", "Zingiber officinale"],
+    "expected_relationships": ["USED_FOR", "MAY_HELP_WITH"],
+    "key_facts": ["susah tidur", "insomnia", "sedatif"]
+  },
+  {
+    "id": 91,
+    "query": "Herbal apa yang baik untuk penderita diabetes?",
+    "expected_answer": "Herbal untuk penderita diabetes antara lain kunyit (menurunkan gula darah), sambiloto, dan daun jambu biji.",
+    "expected_nodes": ["Curcuma longa", "Andrographis paniculata", "Psidium guajava"],
+    "expected_relationships": ["USED_FOR", "MAY_HELP_WITH"],
+    "key_facts": ["diabetes", "gula darah", "antidiabetik"]
+  },
+  {
+    "id": 92,
+    "query": "Tanaman herbal untuk penderita hipertensi",
+    "expected_answer": "Tanaman herbal untuk hipertensi antara lain bawang putih (menurunkan tekanan darah), kunyit, dan pegagan.",
+    "expected_nodes": ["Allium sativum", "Curcuma longa", "Centella asiatica"],
+    "expected_relationships": ["USED_FOR", "MAY_HELP_WITH"],
+    "key_facts": ["hipertensi", "tekanan darah", "antihipertensi"]
+  },
+  {
+    "id": 93,
+    "query": "Herbal apa yang bisa membantu penyakit asma?",
+    "expected_answer": "Herbal untuk asma antara lain jahe (bronkodilator), kunyit (antiinflamasi saluran napas), dan sambiloto.",
+    "expected_nodes": ["Zingiber officinale", "Curcuma longa", "Andrographis paniculata"],
+    "expected_relationships": ["USED_FOR", "MAY_HELP_WITH"],
+    "key_facts": ["asma", "bronkodilator", "antiinflamasi"]
+  },
+  {
+    "id": 94,
+    "query": "Tanaman herbal untuk penderita kolesterol tinggi",
+    "expected_answer": "Tanaman herbal untuk kolesterol tinggi antara lain bawang putih (menurunkan kolesterol), kunyit, dan jahe.",
+    "expected_nodes": ["Allium sativum", "Curcuma longa", "Zingiber officinale"],
+    "expected_relationships": ["USED_FOR", "MAY_HELP_WITH"],
+    "key_facts": ["kolesterol", "hipokolesterolemik", "LDL"]
+  },
+  {
+    "id": 95,
+    "query": "Herbal apa untuk penderita asam urat?",
+    "expected_answer": "Herbal untuk asam urat antara lain kunyit (antiinflamasi), sambiloto, dan jahe.",
+    "expected_nodes": ["Curcuma longa", "Andrographis paniculata", "Zingiber officinale"],
+    "expected_relationships": ["USED_FOR", "MAY_HELP_WITH"],
+    "key_facts": ["asam urat", "urikosurik", "antiinflamasi"]
+  },
+  {
+    "id": 96,
+    "query": "Apa hubungan Curcumin dengan aktivitas antiinflamasi?",
+    "expected_answer": "Curcumin memiliki aktivitas antiinflamasi dengan menghambat enzim COX-2, LOX, dan jalur NF-kB. Curcumin juga mengurangi produksi prostaglandin dan sitokin proinflamasi.",
+    "expected_nodes": ["Curcumin", "Curcuma longa", "Curcuma xanthorrhiza"],
+    "expected_relationships": ["HAS_COMPOUND", "HAS_PROTEIN_TARGET"],
+    "key_facts": ["COX-2", "NF-kB", "prostaglandin", "antiinflamasi"]
+  },
+  {
+    "id": 97,
+    "query": "Bandingkan manfaat kunyit dan temulawak untuk kesehatan hati",
+    "expected_answer": "Keduanya memiliki aktivitas hepatoprotektif. Kunyit (Curcuma longa) mengandung kurkumin yang melindungi hati dari kerusakan oksidatif. Temulawak (Curcuma xanthorrhiza) mengandung xanthorrhizol yang meningkatkan sekresi empedu.",
+    "expected_nodes": ["Curcuma longa", "Curcuma xanthorrhiza", "Curcumin", "Xanthorrhizol"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["hepatoprotektif", "kurkumin", "xanthorrhizol", "empedu"]
+  },
+  {
+    "id": 98,
+    "query": "Bagaimana mekanisme kerja senyawa aktif jahe dalam mengatasi mual?",
+    "expected_answer": "Gingerol dalam jahe bekerja sebagai antagonis reseptor serotonin 5-HT3 di saluran cerna dan pusat muntah di otak. Gingerol juga menghambat enzim COX dan LOX.",
+    "expected_nodes": ["Zingiber officinale", "Gingerol"],
+    "expected_relationships": ["HAS_COMPOUND", "HAS_PROTEIN_TARGET"],
+    "key_facts": ["serotonin", "5-HT3", "COX", "antiemesis"]
+  },
+  {
+    "id": 99,
+    "query": "Apa perbedaan efek farmakologis ginseng Asia dan ginseng Amerika?",
+    "expected_answer": "Ginseng Asia (Panax ginseng) bersifat stimulan dan meningkatkan energi. Ginseng Amerika (Panax quinquefolius) bersifat lebih menenangkan dan cocok untuk stres.",
+    "expected_nodes": ["Panax ginseng"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["stimulan", "menenangkan", "Panax ginseng", "Panax quinquefolius"]
+  },
+  {
+    "id": 100,
+    "query": "Herbal apa saja yang memiliki aktivitas hepatoprotektif dan apa mekanismenya?",
+    "expected_answer": "Herbal hepatoprotektif antara lain kunyit (kurkumin - antioksidan), temulawak (xanthorrhizol - kolagog), sambiloto (andrographolide - antiinflamasi hati), dan meniran (phyllanthin - regenerasi hepatosit).",
+    "expected_nodes": ["Curcuma longa", "Curcuma xanthorrhiza", "Andrographis paniculata", "Phyllanthus niruri"],
+    "expected_relationships": ["HAS_COMPOUND", "USED_FOR"],
+    "key_facts": ["hepatoprotektif", "antioksidan", "kolagog", "regenerasi hepatosit"]
+  }
+]
