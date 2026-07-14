@@ -1,10 +1,11 @@
 """Convenience entry point for evaluation.
 
 Usage:
-    python evaluate.py                  # Quick mode (default)
+    python evaluate.py --mode debug     # Debug: 3 queries
     python evaluate.py --mode quick     # Quick: 10 queries, <3 min
     python evaluate.py --mode standard  # Standard: 30 queries, <10 min
     python evaluate.py --mode full      # Full: 100 queries
+    python evaluate.py                  # Default: quick
 """
 
 import asyncio

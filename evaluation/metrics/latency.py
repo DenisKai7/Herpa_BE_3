@@ -1,18 +1,15 @@
-"""Latency measurement for each pipeline stage."""
+"""Latency measurement for each pipeline stage.
+
+Enhanced with judge, Neo4j, graph expansion, and ranking stages.
+All timing uses time.perf_counter() (monotonic) for consistency.
+"""
 
 import statistics
 from typing import Any
 
 
 def compute_latency_stats(measurements: list[float]) -> dict[str, float]:
-    """Compute latency statistics: avg, median, min, max, p95, p99.
-
-    Args:
-        measurements: List of latency values in milliseconds.
-
-    Returns:
-        Dict with latency statistics.
-    """
+    """Compute latency statistics: avg, median, min, max, p95, p99."""
     if not measurements:
         return {"avg": 0.0, "median": 0.0, "min": 0.0, "max": 0.0, "p95": 0.0, "p99": 0.0}
 
@@ -24,11 +21,9 @@ def compute_latency_stats(measurements: list[float]) -> dict[str, float]:
     min_val = sorted_vals[0]
     max_val = sorted_vals[-1]
 
-    # P95
     p95_idx = int(n * 0.95)
     p95 = sorted_vals[min(p95_idx, n - 1)]
 
-    # P99
     p99_idx = int(n * 0.99)
     p99 = sorted_vals[min(p99_idx, n - 1)]
 
@@ -54,6 +49,9 @@ def create_latency_record(
     neo4j_ms: float = 0.0,
     retrieval_ms: float = 0.0,
     llm_ms: float = 0.0,
+    judge_ms: float = 0.0,
+    graph_expansion_ms: float = 0.0,
+    ranking_ms: float = 0.0,
     total_ms: float = 0.0,
 ) -> dict[str, float]:
     """Create a latency record for a single query."""
@@ -62,6 +60,9 @@ def create_latency_record(
         "neo4j_ms": neo4j_ms,
         "retrieval_ms": retrieval_ms,
         "llm_ms": llm_ms,
+        "judge_ms": judge_ms,
+        "graph_expansion_ms": graph_expansion_ms,
+        "ranking_ms": ranking_ms,
         "total_ms": total_ms,
     }
 
@@ -69,22 +70,34 @@ def create_latency_record(
 def aggregate_latency(all_records: list[dict[str, float]]) -> dict[str, dict[str, float]]:
     """Aggregate latency statistics across all queries.
 
-    Returns dict with stats for each stage.
+    Returns dict with stats for each stage including new judge/neo4j stages.
     """
-    if not all_records:
-        return {stage: compute_latency_stats([]) for stage in ["embedding", "neo4j", "retrieval", "llm", "total"]}
-
     stage_keys = {
         "embedding": "embedding_ms",
         "neo4j": "neo4j_ms",
         "retrieval": "retrieval_ms",
         "llm": "llm_ms",
+        "judge": "judge_ms",
+        "graph_expansion": "graph_expansion_ms",
+        "ranking": "ranking_ms",
         "total": "total_ms",
     }
 
     aggregated = {}
     for stage_name, record_key in stage_keys.items():
-        measurements = [r.get(record_key, 0.0) for r in all_records]
+        measurements = [r.get(record_key, 0.0) for r in all_records if r.get(record_key, 0.0) > 0]
         aggregated[stage_name] = compute_latency_stats(measurements)
 
     return aggregated
+
+
+def compute_generation_speed(per_query: list[dict[str, Any]]) -> float:
+    """Compute average generation speed in tokens/sec."""
+    speeds = []
+    for r in per_query:
+        tokens = r.get("agent_tokens", {})
+        ct = tokens.get("completion_tokens", 0)
+        llm_ms = r.get("latency", {}).get("llm_ms", 0)
+        if ct > 0 and llm_ms > 0:
+            speeds.append(ct / (llm_ms / 1000))
+    return round(statistics.mean(speeds), 1) if speeds else 0.0

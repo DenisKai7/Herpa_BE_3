@@ -1,4 +1,7 @@
-"""Graph Retrieval Accuracy: node and relationship precision/recall."""
+"""Graph Retrieval Accuracy: node and relationship precision/recall.
+
+Enhanced with detailed node/relation tracking, IDs, and graph structure info.
+"""
 
 from typing import Any
 
@@ -55,7 +58,137 @@ def extract_relationships_from_retrieval(retrieval: dict[str, Any]) -> set[str]:
         if fact.get("contraindications"):
             relationships.add("HAS_CONTRAINDICATION")
         if fact.get("side_effects"):
-            relationships.add("HAS_TOXICITY")
+            relationships.add("HAS_SIDE_EFFECT")
+
+    return relationships
+
+
+def extract_detailed_nodes(retrieval: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract detailed node information for audit."""
+    nodes = []
+    seen = set()
+
+    for entity in retrieval.get("entities", []):
+        name = entity.get("canonical_name") or entity.get("original_text", "")
+        if name and name.lower() not in seen:
+            nodes.append({
+                "name": name,
+                "type": entity.get("entity_type", "unknown"),
+                "confidence": entity.get("confidence", 0.0),
+                "source": "entity_resolution",
+            })
+            seen.add(name.lower())
+
+    for fact in retrieval.get("facts", []):
+        plant = fact.get("plant", {})
+        name = plant.get("scientific_name") or plant.get("local_name", "")
+        if name and name.lower() not in seen:
+            nodes.append({
+                "name": name,
+                "type": "herb",
+                "confidence": 1.0,
+                "source": "graph_retrieval",
+                "local_name": plant.get("local_name", ""),
+                "scientific_name": plant.get("scientific_name", ""),
+            })
+            seen.add(name.lower())
+
+        for compound in fact.get("compounds", []):
+            if isinstance(compound, dict):
+                cname = compound.get("name", "")
+                if cname and cname.lower() not in seen:
+                    nodes.append({
+                        "name": cname,
+                        "type": "compound",
+                        "confidence": 0.8,
+                        "source": "graph_retrieval",
+                    })
+                    seen.add(cname.lower())
+
+        for use in fact.get("therapeutic_uses", []):
+            if isinstance(use, dict):
+                uname = use.get("name", "")
+                if uname and uname.lower() not in seen:
+                    nodes.append({
+                        "name": uname,
+                        "type": "therapeutic_use",
+                        "confidence": 0.8,
+                        "source": "graph_retrieval",
+                    })
+                    seen.add(uname.lower())
+
+    return nodes
+
+
+def extract_detailed_relationships(retrieval: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract detailed relationship information for audit."""
+    relationships = []
+
+    for fact in retrieval.get("facts", []):
+        plant = fact.get("plant", {})
+        plant_name = plant.get("scientific_name") or plant.get("local_name", "unknown")
+
+        for compound in fact.get("compounds", []):
+            if isinstance(compound, dict):
+                relationships.append({
+                    "type": "HAS_COMPOUND",
+                    "source": plant_name,
+                    "target": compound.get("name", "unknown"),
+                    "source_type": "herb",
+                    "target_type": "compound",
+                })
+
+        for use in fact.get("therapeutic_uses", []):
+            if isinstance(use, dict):
+                relationships.append({
+                    "type": "USED_FOR",
+                    "source": plant_name,
+                    "target": use.get("name", "unknown"),
+                    "source_type": "herb",
+                    "target_type": "therapeutic_use",
+                })
+
+        for family in fact.get("families", []):
+            if isinstance(family, dict):
+                relationships.append({
+                    "type": "BELONGS_TO",
+                    "source": plant_name,
+                    "target": family.get("name", "unknown"),
+                    "source_type": "herb",
+                    "target_type": "family",
+                })
+
+        for target in fact.get("protein_targets", []):
+            if isinstance(target, dict):
+                relationships.append({
+                    "type": "HAS_PROTEIN_TARGET",
+                    "source": plant_name,
+                    "target": target.get("name", "unknown"),
+                    "source_type": "herb",
+                    "target_type": "protein_target",
+                })
+
+        if fact.get("contraindications"):
+            for contra in fact["contraindications"]:
+                if isinstance(contra, dict):
+                    relationships.append({
+                        "type": "HAS_CONTRAINDICATION",
+                        "source": plant_name,
+                        "target": contra.get("name", "unknown"),
+                        "source_type": "herb",
+                        "target_type": "contraindication",
+                    })
+
+        if fact.get("side_effects"):
+            for se in fact["side_effects"]:
+                if isinstance(se, dict):
+                    relationships.append({
+                        "type": "HAS_SIDE_EFFECT",
+                        "source": plant_name,
+                        "target": se.get("name", "unknown"),
+                        "source_type": "herb",
+                        "target_type": "side_effect",
+                    })
 
     return relationships
 
@@ -113,9 +246,14 @@ def compute_graph_accuracy(
     expected_nodes: list[str],
     expected_relationships: list[str],
 ) -> dict[str, Any]:
-    """Compute graph retrieval accuracy for a single query."""
+    """Compute graph retrieval accuracy for a single query.
+
+    Enhanced with detailed node/relation tracking and graph structure info.
+    """
     retrieved_nodes = extract_nodes_from_retrieval(retrieval)
     retrieved_rels = extract_relationships_from_retrieval(retrieval)
+    detailed_nodes = extract_detailed_nodes(retrieval)
+    detailed_rels = extract_detailed_relationships(retrieval)
 
     node_metrics = compute_node_metrics(retrieved_nodes, expected_nodes)
     rel_metrics = compute_relationship_metrics(retrieved_rels, expected_relationships)
@@ -128,6 +266,10 @@ def compute_graph_accuracy(
         + rel_metrics["recall"]
     ) / 4
 
+    # Graph structure
+    graph_depth = 1 if retrieval.get("facts") else 0
+    graph_breadth = len(retrieved_nodes)
+
     return {
         "node_precision": node_metrics["precision"],
         "node_recall": node_metrics["recall"],
@@ -136,6 +278,13 @@ def compute_graph_accuracy(
         "overall_accuracy": round(overall, 4),
         "retrieved_nodes": list(retrieved_nodes),
         "retrieved_relationships": list(retrieved_rels),
+        # Enhanced detail
+        "detailed_nodes": detailed_nodes,
+        "detailed_relationships": detailed_rels,
+        "graph_depth": graph_depth,
+        "graph_breadth": graph_breadth,
+        "total_nodes": len(detailed_nodes),
+        "total_relationships": len(detailed_rels),
     }
 
 
@@ -156,5 +305,11 @@ def aggregate_graph_metrics(all_results: list[dict[str, Any]]) -> dict[str, floa
     for key in keys:
         values = [r[key] for r in all_results if key in r]
         aggregated[key] = round(sum(values) / len(values), 4) if values else 0.0
+
+    # Average graph structure
+    depths = [r.get("graph_depth", 0) for r in all_results]
+    breadths = [r.get("graph_breadth", 0) for r in all_results]
+    aggregated["average_graph_depth"] = round(sum(depths) / len(depths), 2) if depths else 0
+    aggregated["average_graph_breadth"] = round(sum(breadths) / len(breadths), 2) if breadths else 0
 
     return aggregated

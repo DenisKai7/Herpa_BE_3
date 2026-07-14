@@ -20,10 +20,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from evaluation.evaluator import Evaluator, EvalMode
 from evaluation.report import (
+    print_error_report,
     print_per_query_detail,
     print_terminal_report,
     save_csv,
     save_excel,
+    save_html,
     save_json,
     save_markdown,
     save_summary_json,
@@ -125,8 +127,8 @@ class RichProgress:
 
 async def main():
     parser = argparse.ArgumentParser(description="HERPA GraphRAG Evaluation Framework")
-    parser.add_argument("--mode", choices=["quick", "standard", "full"], default="quick",
-                        help="Evaluation mode: quick (10q, <3min), standard (30q, <10min), full (100q)")
+    parser.add_argument("--mode", choices=["debug", "quick", "standard", "full"], default="quick",
+                        help="Evaluation mode: debug (3q), quick (10q, <3min), standard (30q, <10min), full (100q)")
     parser.add_argument("--concurrent", type=int, default=5, help="Max concurrent queries (default: 5)")
     parser.add_argument("--no-cache", action="store_true", help="Disable result caching")
     parser.add_argument("--clear-cache", action="store_true", help="Clear cache before running")
@@ -135,6 +137,7 @@ async def main():
     parser.add_argument("--no-charts", action="store_true", help="Skip chart generation")
     parser.add_argument("--show-detail", type=int, default=10, help="Show per-query detail for N queries")
     parser.add_argument("--workers", type=int, default=0, help="Thread pool workers (default: auto)")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducible sampling (default: None = first N)")
     args = parser.parse_args()
 
     setup_logging(args.verbose)
@@ -142,7 +145,7 @@ async def main():
 
     mode = EvalMode(args.mode)
 
-    mode_labels = {"quick": "Quick (10q, <3min)", "standard": "Standard (30q, <10min)", "full": "Full (100q)"}
+    mode_labels = {"debug": "Debug (3q)", "quick": "Quick (10q, <3min)", "standard": "Standard (30q, <10min)", "full": "Full (100q)"}
 
     try:
         from rich.console import Console
@@ -166,6 +169,7 @@ async def main():
         use_cache=not args.no_cache,
         clear_cache=args.clear_cache,
         max_workers=args.workers,
+        seed=args.seed,
     )
 
     # Setup
@@ -221,6 +225,9 @@ async def main():
     if args.show_detail > 0:
         print_per_query_detail(eval_results.get("per_query_results", []), args.show_detail)
 
+    # Error report
+    print_error_report(eval_results)
+
     # Performance
     cached = eval_results.get("cached_count", 0)
     non_cached = total - cached
@@ -251,15 +258,35 @@ async def main():
     except ImportError:
         print("  Generating reports...")
 
-    json_path = save_json(eval_results)
-    summary_path = save_summary_json(eval_results)
-    csv_path = save_csv(eval_results)
-    md_path = save_markdown(eval_results)
+    try:
+        json_path = save_json(eval_results)
+        print(f"    JSON:      {json_path}")
+    except Exception as e:
+        print(f"    JSON:      skipped ({e})")
 
-    print(f"    JSON:      {json_path}")
-    print(f"    Summary:   {summary_path}")
-    print(f"    CSV:       {csv_path}")
-    print(f"    Markdown:  {md_path}")
+    try:
+        summary_path = save_summary_json(eval_results)
+        print(f"    Summary:   {summary_path}")
+    except Exception as e:
+        print(f"    Summary:   skipped ({e})")
+
+    try:
+        csv_path = save_csv(eval_results)
+        print(f"    CSV:       {csv_path}")
+    except Exception as e:
+        print(f"    CSV:       skipped ({e})")
+
+    try:
+        md_path = save_markdown(eval_results)
+        print(f"    Markdown:  {md_path}")
+    except Exception as e:
+        print(f"    Markdown:  skipped ({e})")
+
+    try:
+        html_path = save_html(eval_results)
+        print(f"    HTML:      {html_path}")
+    except Exception as e:
+        print(f"    HTML:      skipped ({e})")
 
     if not args.no_excel:
         try:
